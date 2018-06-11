@@ -1,0 +1,167 @@
+---
+title: "Poisson EDA example (W271 Unit 5)"
+author: "Michael Winton"
+output: html_document
+date: \today
+header-includes:
+  - \usepackage{amsmath}
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(car)      # Ornstein dataset, Anova, residualPlots
+library(effects)  # diagnostic plots for Poisson model
+library(Hmisc)    # describe function
+```
+
+## Introduction
+
+- Introduce use of a Poisson regression to model a count response variable
+- Consider situations in which the conditional distribution of the response variable follow a Poisson distribution
+- Using a dataset on executives at large Canadian companies, study interocking directorates (board members serving on each other's boards)
+
+## Dataset
+
+This example works with the `Ornstein` dataset from the `car` library
+
+```{r}
+# list the top 10 observations in the dataset
+head(Ornstein, 10)
+
+# summary statistics about the dataset
+summary(Ornstein)
+describe(Ornstein)  #more verbose summary stats
+
+# show mean value of interlocks per nation|sector
+round(with(Ornstein, tapply(interlocks, nation, mean)), 1)
+round(with(Ornstein, tapply(interlocks, sector, mean)), 1)
+```
+
+In the original study, the author performed an OLS regression with the response variable being `interlocks`, the number of interlocks maintained by each firm, on firm's assets (in millions of dollars), sector of operation, and nation of control.
+
+However, as the variable `interlocks` is a count, a *Poisson* regression model may be more appropriate.
+
+Let's take a look at the distribution of the `interlocks` variable.  We will have to construct this graph in multiple steps.
+
+## Analyis of the Response Variable
+```{r}
+# Frequency distribution of the interlocks
+tab <- xtabs(~interlocks, data=Ornstein)
+str(tab)      # this view is less useful for a table
+class(tab)    # check class (so we know what methods and attributes are available)
+names(tab)    # variable names
+nrow(tab)
+tab
+
+# Record the distinct values of the interlocks
+x <- as.numeric(names(tab))  # xtabs stored these as char variables
+
+# Scatter plot of data
+plot(x, tab, xlab='Number of Interlocks', ylab='Frequency')
+
+# Bar plot of frequencies
+plot(x, tab, type='h',  xlab='Number of Interlocks', ylab='Frequency')
+points(x, tab, pch=16)  # decorate top of bars with a point
+```
+
+## Quick Analysis of Exploratory Variables
+
+```{r}
+# Histogram (untransformed)
+with(Ornstein, hist(assets, breaks='FD', col='navy', main='Distribution of Assets, millions'))
+```
+
+Shape suggests a log transform may help the distribution be more approximately normal.
+
+```{r}
+# Histogram (log2 transformed)
+with(Ornstein, hist(log2(assets), breaks='FD', col='navy', main='Distribution of Log_2(Assets), millions'))
+
+```
+
+```{r}
+# scatterplot matrices to look at variable correlations
+scatterplotMatrix(~assets + nation + sector, data=Ornstein)
+scatterplotMatrix(~log2(assets) + nation + sector, data=Ornstein)
+```
+
+*Note: this is NOT a good approach.*  Scatterplot matrices don't make a lot of sense in this case since explanatory variables are categorical.  SCM doesn't display the features very well.  Instead, use boxplots:
+
+```{r}
+Boxplot(assets ~ nation, data=Ornstein, main='Assets by Nation')
+Boxplot(assets ~ sector, data=Ornstein, main='Assets by Sector')
+```
+
+*Observations:* Because `assets` is extremely right-skewed, we see the extended tail of points for `CAN`.   Banking sector has the largest assets, and also extremely wide distribution. Since data is extremely right-skewed, we may want to look at modified plots: 95th percentile assets; excluding banking.
+
+```{r}
+summary(Ornstein$assets)
+(pctile95 <- quantile(Ornstein$assets, 0.95))
+
+Boxplot(assets[assets<pctile95] ~ nation[assets<pctile95], data=Ornstein, main='Assets by Nation (Assets < ~$20B)')
+Boxplot(assets[sector!='BNK'] ~ sector[sector!='BNK'], data=Ornstein, main='Assets by Sector (Excluding Banking)')
+
+```
+
+## Poisson Regression
+
+Now, build the regression model.  Note that we're using the log-transformation of `assets`.
+
+```{r}
+poisson_fit <- glm(interlocks ~ log2(assets) + nation + sector, family=poisson(link=log), data=Ornstein)
+summary(poisson_fit)
+```
+
+*Observations:* We can look at the summary to see which are the (omitted) base cases.  In this case, it's `nation=CAN` and `sector=AGR`.   Also, remember that the coefficients are for the *linear predictor*, ie. for the *log*(counts).  We have to exponentiate to get effect on the counts.
+
+Let's look at the frequency table.
+
+```{r}
+# Create frequency table
+with(Ornstein, table(nation, sector))
+```
+
+*Observations:* Our reference category (CAN + AGR) has a substantial number of observations.  This is good; if our base case had a small number, we might be better off changing the base case.
+
+** Analysis of Deviance
+
+```{r}
+Anova(poisson_fit)
+```
+
+*Observations:* Capital `Anova` does a Type II analysis.  All predictors have high significance.
+
+## Interpretation of Coefficients
+
+Coefficients of the model are interpreted as effects on the log-count scale (ie. the scale of the linear predictor). Exponentiating the coefficients produces the multiplicative effects on the count scale.
+
+```{r}
+exp(coef(poisson_fit))
+```
+
+*Observations:* a corporation that is twice the size (based on assets) of another one has an estimated 36.7% higher number of interlocks, holding all other factors constant.
+
+A US firm on average maintains only 46.2% as many interlocks as a Canadian firm, holding all other factors constant.
+
+## Visualize the Effects
+
+```{r}
+plot(allEffects(poisson_fit, default.levels=50))
+```
+
+This plot command plots one plot per predictor.  Note that connecting lines for the categorical predictors don't have any real meaning.
+
+*Assets Effect plot*: y-axis is on log scale (scale of linear predictor).
+
+## Model Diagnostics
+
+The diagnostic plots for a Poisson model are different than for linear regression.  These plots use Pearson residuals.  There is one plot per explanatory variable, as well as one for the linear predictor.  We want to see that there are no systematic patterns between residuals and the explanatory variables.
+
+```{r}
+residualPlots(poisson_fit, layout=c(2,2))
+```
+
+*Observations:* not much pattern observed here.  The *lack of fit test* results are also displayed (only meaninigful for continuous variables, otherwise `NA`).  Here, we reject the null hypothesis that there's a relationship between Pearson residuals and `log2(assets)`.
+
