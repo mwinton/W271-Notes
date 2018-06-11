@@ -165,5 +165,7 @@ The diagnostic plots for a Poisson model are different than for linear regressio
 residualPlots(poisson_fit, layout=c(2,2))
 ```
 
-*Observations:* not much pattern observed here.  The *lack of fit test* results are also displayed (only meaniningful for continuous variables, otherwise `NA`).  A large p-value means we cannot reject the null hypothesis that the model fits the data well.  Here, the p-value of ~0 indicates a lack of fit. (**TODO: confirm this interpretation.**)
+*Observations:* not much pattern observed here.  The *lack of fit test* results are also displayed (only meaniningful for continuous variables, otherwise `NA`).  According to the R help text, this is a curvature test.  For plots against a term in the model formula, say $X$, the test displayed is the t-test for for $I(X^2)$ in the fit of update, model, ~. + $I(X^2)$).
+
+A large p-value means we cannot reject the null hypothesis that the model fits the data well.  Here, the p-value of ~0 indicates a lack of fit. (**TODO: confirm this interpretation.**)
 

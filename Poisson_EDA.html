@@ -381,7 +381,8 @@ with(Ornstein, table(nation, sector))</code></pre>
 ## log2(assets)    15.745        0
 ## nation              NA       NA
 ## sector              NA       NA</code></pre>
-<p><em>Observations:</em> not much pattern observed here. The <em>lack of fit test</em> results are also displayed (only meaniningful for continuous variables, otherwise <code>NA</code>). A large p-value means we cannot reject the null hypothesis that the model fits the data well. Here, the p-value of ~0 indicates a lack of fit. (<strong>TODO: confirm this interpretation.</strong>)</p>
+<p><em>Observations:</em> not much pattern observed here. The <em>lack of fit test</em> results are also displayed (only meaniningful for continuous variables, otherwise <code>NA</code>). According to the R help text, this is a curvature test. For plots against a term in the model formula, say <span class="math inline">\(X\)</span>, the test displayed is the t-test for for <span class="math inline">\(I(X^2)\)</span> in the fit of update, model, ~. + <span class="math inline">\(I(X^2)\)</span>).</p>
+<p>A large p-value means we cannot reject the null hypothesis that the model fits the data well. Here, the p-value of ~0 indicates a lack of fit. (<strong>TODO: confirm this interpretation.</strong>)</p>
 </div>
 
 
