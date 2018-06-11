@@ -1,0 +1,306 @@
+---
+title: "Multinomial Response - Categorical Data"
+author: "Michael Winton"
+date: \today
+output: pdf_document
+header-includes:
+  - \usepackage{amsmath}
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, echo=FALSE}
+library(knitr)
+opts_chunk$set(tidy.opts=list(width.cutoff=70), tidy=TRUE, fig.align="center")
+```
+
+\section{Multicategory Responses}
+
+\subsection{Multinomial Probability Distribution}
+
+The categorical response variable Y now has multiple levels $j=1, ... J$, where each category has $\pi_j = P(Y=j)$ and $N_j$ is the number of trails responding with category $j$.  These may or may not be ordinal responses. The PMF is known as the "multinomial probability distribution". (This is for a _single sample_ of $n$ observations.)
+
+$$ P(N_1=n_1, ... N_j=n_j) = \frac{n!}{\prod_{j=1}^Jn_j!}\prod_{j=1}^J \pi_j^{n_j}$$
+The MLE for each $\pi_j$ is $\hat{\pi}_j = n_j/n$ (ie. proportion in each category).
+
+```{r}
+pi_j <- c(0.25, 0.35, 0.2, 0.1, 0.1)  # assume these are the true probabilities of each class
+n_j <- rmultinom(n=1, size=1000, prob=pi_j)  # just create 1 sample with 1000 trials
+(data.frame(n_j, pihat_j=n_j/1000, pi_j))  # shows n_j randomly generated from each class
+```
+
+\subsection{Contingency Tables for mixture of two multinomial distributions}
+
+If you have *one* multinomial distribution that is characterized by levels of two random variables $X, Y$, the data can be represented in a contingency table with a row for each $X$ and a column for each $Y$.  The PMF for $N_{11}, ... N_{IJ}$ is modified to:
+
+$$ P(N_{11}=n_{11}, ... N_{IJ}=n_{IJ}) = \frac{n!}{\prod_{i=1}^I\prod_{j=1}^Jn_{ij}!}\prod_{i=1}^I\prod_{j=1}^J \pi_{ij}^{n_{ij}}$$
+This isn't really a new equation, just new terminology to account for the multiple rows and columns in the contingency table.
+```{r}
+# set up the true probability table
+pi_ij <- c(0.2, 0.3, 0.2, 0.1, 0.1, 0.1)  # assume these are the true probabilities of each class
+(pi_table <- array(data=pi_ij, dim=c(2,3), dimnames=list(X=1:2, Y=1:3)))
+
+# simulate a sample with 1000 obsefvations
+n_ij <- rmultinom(n=1, size=1000, prob=pi_ij)
+(c_table <- array(data=n_ij, dim=c(2,3), dimnames=list(X=1:2, Y=1:3)))
+(pi_hat_table <- c_table/sum(c_table))
+```
+
+In some cases, instead of having one multinomial distribution, we may intentionally sample from $I$ different groups (corresponding to the rows in the contingency table).  This is called the "product multinomial model".  In this case, we have to replace $\pi_{ij}$ values with $\pi_{j|i}$, so that probabilities in each row add up to 1.
+
+\section{Independence}
+
+If $X$ does not have an effect on probabilities of outcomes of $Y$, they are *independent*.  In this case, the probability of a joint outcome of $X=i, Y=j$ is the product of the marginal probabilities $P(X), P(Y)$.  In our notation, that is $\pi_{ij} = \pi_{i+} \cdot \pi_{+j}$.
+
+We often want to test for independence; ie. we want to know if $\pi_{j|1} = ... =\pi_{j|I} = \pi_{+j}$ for all $J$.
+
+Testing for independence:
+
+$H_0: \pi_{ij} = \pi_{i+} \cdot \pi_{+j}$ for all $i$ and $j$. ($H_a:$ at least some aren't equal.)
+
+We use a Pearson $\chi^2$ test.  The test statistic is:
+$$X^2 = \frac{(\text{observed count - estimated expected count})^2}{\text{estimated expected count}}
+=\sum_{i=1}^I\sum_{j=1}^J\frac{(n_{ij} - n\hat{\pi}_{i+}\hat{\pi}_{+j})^2}{n\hat{\pi}_{i+}\hat{\pi}_{+j}}
+= \sum_{i=1}^I\sum_{j=1}^J\frac{(n_{ij} - n_{i+}n_{+j}/n)^2}{n_{i+}n_{+j}/n}$$
+
+Alternately, we can do a LRT with $\Lambda = \frac{\text{Max likelihood under }H_0}{\text{Max likelihood under }H_0\text{ or }H_a}$.  Our test statistic in this case is:
+$$ -2log(\Lambda) = 2 \sum_{i=1}^I\sum_{j=1}^J n_{ij} log(\frac{n_{ij}}{n_{i+}n_{+j}/n})$$
+With either test statistic, if $H_0$ is true, $X^2$ has an approximate $\chi_{(I-1)(J-1)}^2$ distribution.  Reject $H_0$ if $X^2$ or $-2log(\Lambda)$ is great than $\chi^2$.  NOTE: test results for $X^2$ and $-2log(\Lambda)$ may vary greatly for small sample sizes; generally we want an expected value in each cell to be $>1$ or $>5$.  
+
+```{r}
+# example of reading data in to a contingency table
+diet <- read.csv('Fiber.csv')
+head(diet)
+diet$fiber <- factor(diet$fiber, levels=c('none', 'bran', 'gum', 'both'))
+diet$bloat <- factor(diet$bloat, levels=c('none', 'low', 'medium', 'high'))
+(diet_table <- xtabs(count ~ fiber + bloat, data=diet))
+```
+
+Now, here are 3 ways to test for independence:
+
+```{r}
+(indep_test <- chisq.test(diet_table, correct=FALSE))  # don't let it apply extra corrections
+summary(diet_table)  
+
+library(vcd)  # calculates X^2 test only
+assocstats(diet_table)  # calculates both X^2 and LRT tests
+
+qchisq(p=0.95, df=9)  # this is the critical value that the test stats are being compared against
+(p_x2 <- 1-pchisq(16.943, df=9))  # we can also validate the p-values reported above
+(p_lrt <- 1-pchisq(18.880, df=9))  # we can also validate the p-values reported above
+```
+
+Note that $df=9=(I-1)(J-1)=(4-1)(4-1)$.  All 3 methods give same result for $X^2$ test.  Small p-values mean we reject the null hypothesis of independence.
+
+We can also get the expected counts to see whether they meet the $>1$ or $>5$ threshholds for $\chi^2$ being a good approximation.  The warning in some of the above methods is because some of these are $<5$.
+
+```{r}
+indep_test$expected
+```
+
+
+\section{Nominal Response Regression Models}
+
+We can define *odds* as a comparison of _any pair of response categories_; a popular regression model for multinomial resopnses is by forming the odds of the remaining $J-1$ categories against a base category.  This multinomial regression model looks like:
+
+$$log(\pi_j / \pi_1) = \beta_{j0} + \beta_{j1}x_1 + ... + \beta_{jp}x_p \forall j=2,...J$$
+
+Note that there is a separate set of $\beta$ parameters _for each response category_, so each response's log-odds can relate to the explanatory variables in a different way.  It's easy to compare other categories:
+
+$$log(\pi_2/\pi_3) = log(\pi_2/\pi_1) - log(\pi_3/\pi_1) = log(\pi_2) - log(\pi_3)
+= (\beta_{20} - \beta_{30}) + (\beta_{21} - \beta_{31}) x_1 + ... + (\beta_{2p} - \beta_{3p})x_p$$
+
+\subsection{Calculating Probabilities}
+
+We can also calculate probabilities by maximum likelihood:
+$$\pi_j = \pi_1 exp(\beta_{j0} + \beta_{j1}x_1 + ... + \beta_{jp}x_p) \forall j=2,...J$$
+But we need to find $\pi_1$ first.  Since $\pi_1 + \pi_2 + ... \pi_J = 1$, we can get an expression for $\pi_1$:
+$$ \pi_1 = \frac{1}{1 + \sum_{j=2}^J exp(\beta_{j0} + \beta_{j1}x_1 + ... + \beta_{jp}x_p)}$$
+Combining, we get:
+$$ \pi_j = \frac{exp(\beta_{j0} + \beta_{j1}x_1 + ... + \beta_{jp}x_p)}{1 + \sum_{j=2}^J exp(\beta_{j0} + \beta_{j1}x_1 + ... + \beta_{jp}x_p)} \forall j=2,...J $$
+For a sample of size $m$ observations, the likelihood function is the product of $m$ multinomial distributions, with $\pi_j$ as described in these equations.  Iterative numerical procedures are used to find these MLEs using `nnet::multinom(...)`:
+
+```{r}
+wheat <- read.csv('wheat.csv')
+head(wheat)
+levels(wheat$type)  # observe that 'Healthy' is the base case
+
+library(nnet)
+wheat_fit <- multinom(type ~ class + density + hardness + size + weight + moisture, data=wheat)
+summary(wheat_fit)
+```
+We interpret these results as:
+$$ log(\hat{\pi}_{scab} / \hat{\pi}_{healthy}) = 30.55 - 0.65I(class=SRW) -21.60 density - 0.016 hardness + ...$$
+
+$$ log(\hat{\pi}_{sprout} / \hat{\pi}_{healthy}) = 19.17 - 0.22I(class=SRW) -15.12 density - 0.021 hardness + ...$$
+
+NOTE: `mcprofile(...)` and `confint(...)` cannot be used for profile likelihood ratio intervals for multinomial models. Wald intervals are possible to calculate because `multinom(...)` gives you standard errors.
+
+LRTs for significance of coefficients are straightforward using `Anova(...)`.  Typically we want to explore whether a particular explanatory variable ahs an effect on _all_ response categories (not just one).  That hypothesis test is $H_0: \beta_{jr}=0 \forall j=2, ..., J.$
+```{r}
+library(car)
+Anova(wheat_fit)
+```
+
+Here are two equivalent ways to see the estimated probabilities for each class for each observation:
+
+```{r}
+head(wheat_fit$fitted.values)
+head(predict(wheat_fit, newdata=wheat, type='probs'))
+head(predict(wheat_fit, newdata=wheat, type='class'))
+```
+
+\section{Odds Ratios for Multinomial Models}
+
+Odds of a category $j$ response vs. a category $1$ response change by $exp(c\beta_{jr})$ for every $c-unit$ change in $x_r$, holding other variables constant.
+
+Odds of a category $j$ response vs. a category $j'$ response change by $exp[c(\beta_{jr} - \beta_{j'r})]$ for every $c-unit$ change in $x_r$, holding other variables constant.
+
+```{r}
+sd_wheat <- apply(wheat[,-c(1,7)], MARGIN=2, FUN=sd)  # find st dev for continuous vars (we'll use for 'c')
+(c_value <- c(1, sd_wheat))
+beta_hat_scab <- coef(wheat_fit)[1,2:7]
+beta_hat_sprout <- coef(wheat_fit)[2,2:7]
+
+# We calculate the OR (according to a c = 1 * sd change) for all variables, but can only change one at a time
+or_scab <- exp(c_value * beta_hat_scab)
+round(or_scab, 2)  # OR for a c-unit increase (scab vs healthy)
+round(1/or_scab, 2)  # OR for a c-unit descrease (scab vs healthy)
+
+or_sprout <- exp(c_value * beta_hat_sprout)
+round(or_sprout, 2)  # OR for a c-unit increase (sprout vs healthy)
+round(1/or_sprout, 2)  # OR for a c-unit descrease (sprout vs healthy)
+```
+
+\subsection{Confidence Intervals for Parameters}
+
+The `confint(...)` function for multinomial regression does *not* use likelihood ratios; it uses Wald.  We calculate CI for Odds Ratios similarly to binomial case, by finding the CI for the linear predictor first, and then exponentiating.
+
+Note how confidence intervals are stored: [coefficients, lower:upper limits, class sequence from fit output].
+```{r}
+(ci_betas <- confint(wheat_fit, level=0.95))
+
+or_scab_ci <- exp(c_value * ci_betas[2:7, 1:2, 1])  # make sure to get the set for scab
+round(or_scab_ci, 2)  # OR CI for a c-unit increase
+round(1/or_scab_ci, 2) # OR CI for a c-unit decrease
+or_sprout_ci <-  exp(c_value * ci_betas[2:7, 1:2, 2])  # make sure to get the set for sprout
+round(or_sprout_ci, 2)  # OR CI for a c-unit increase
+round(1/or_sprout_ci, 2) # OR CI for a c-unit decrease
+```
+
+\section{Applying Multinomial Regression model to Contingency Table to Test Independence (Alternative Approach)}
+
+The multinomial regression model provides a convenient framework for performing a LRT to test for independence (alternative to method described earlier).  We create an *indicator variable* for each level of $X$ (ie. $x_2 = I(x_{j=2})$). If we have _dependence_, the model looks like:    
+$$H_a: log(\pi_j / \pi_1) = \beta_{j0} + \beta_{j2}x_2 + ... + \beta_{jp}x_p \forall j=2,...J$$
+Note that for consistency, we start with $j=2$ and $\beta_{j2}$ so that subscripts match class levels for non-base cases.  When we have _independence_, the model becomes:
+$$H_0: log(\pi_j / \pi_1) = \beta_{j0}\forall j=2,...J$$
+This means that, while each category of $Y$ can have a difference $\pi_j$, these values do *not* change as a function of X.  These two models can be compared in a hypothesis test.  This is the same as writing $H_0: \beta_{j2} = ... = \beta_{jI}=0 \forall j=2,...J$ and $H_a:$ not all of these $\beta$ parameters are 0, for some $j$.
+
+In the following example, weights are the counts from each cell of the contingench table, even though we aren't using the crosstab-formatted matrix.
+
+```{r}
+library(nnet)
+head(diet)
+diet_fit_nominal <- multinom(formula=bloat~fiber, weights=count, data=diet)  # not in crosstab c-table format
+summary(diet_fit_nominal)
+```
+
+To perform LRT for independence, we simply use `Anova(...)`:
+```{r}
+Anova(diet_fit_nominal)
+```
+Note that the p-value (0.02623) is the same as that reported earlier in the $-2log(\Lambda)$ test with `vcd:assocstats(...)`.
+  
+\section{Proportional Odds Model for Ordinal Response data}
+
+Basically, when we have ordinal data, we just apply the logit transformation to the _cumulative_ probability distribution (CDF).  The _cumulative_ probability for $Y$ is $P(Y|j) = \pi_1 + \pi_2 + ... \pi_j$.  Then we apply the logit transformation:
+
+$$ logit[P(Y \le j)] = log\bigg[\frac{P(Y \le j)}{1-P(Y \le j)}\bigg] = log\bigg[\frac{\pi_1  + ... \pi_j}{\pi_{j+1}  + ... \pi_J}\bigg]$$
+Then the "Proportional Odds Model" applies a big simplification by assuming the $\beta$ parameters *except for the intercept are the same for all explanatory variables* (for all $j=1...J-1$).  This means that *effects of explanatory variables are the same, no matter which cumulative probabilities were used to form the log odds*!  If we were to plot these logit curves, they would have the identical shape, just be shifted on the x axis according to intercept terms.
+
+$$logit[P(Y \le j)] = \beta_{j0} + \beta_1 x_1 + ... \beta_p x_p \forall J=1,..J-1$$
+Also, this can be rearranged to:
+$$P(Y \le j) = \frac{exp(\beta_{j0} + \beta_1 x_1 + ... \beta_p x_p)}{1+exp(\beta_{j0} + \beta_1 x_1 + ... \beta_p x_p)}  \forall J=1,..J-1$$
+It's important to remember that because of the nature of cumulative probabilities, $\beta_{J0} > ... > \beta_{10}$.  
+
+If we wanted a model where the $\beta$ parameters were allowed to vary for level of $J$, that would be the "cumulative probability model" (not covered in class).  This model also gets more complicated when there are more than 2 categorical explanatory variables (because we need a m-dimensional contingency table).
+
+We can also look at how we express $\pi_j$ in terms of these cumulative probabilities:
+$$ \pi_j = P(Y =j) = P(Y \le j) - P(Y \le j-1) = \frac{exp(\beta_{j0} + \beta_1 x_1 + ...)}{1+exp(\beta_{j0} + \beta_1 x_1 + ...)} - \frac{exp(\beta_{j-1,0} + \beta_1 x_1 + ...)}{1+exp(\beta_{j-1,0} + \beta_1 x_1 + ...)} \forall j=2,..J-1$$
+
+\subsection{Estimation and Inference}
+
+Parameters are estimated using MLE, with the `MASS::polr(...)` function.  If we have one explanatory variable, the hypotheses of interest are $H_0: \beta_1 = 0$ and $H_a: \beta_1 \ne 0$.  
+
+If we reject $H_0$, then the ordering of log-odds comparing $P(Y \le j)$ and $P(Y>j)$ holds.  Log odds progressively grow larger (or smaller, depending on sign of $\beta_1$).
+
+If we fail to reject $H_0$, then the log-odds comparing $P(Y \le j)$ and $P(Y>j)$ do not depend on this explanatory variable.  For the case of two explanatory variables, this is equivalent to _independence_.
+
+**WARNING: levels of the $Y$ variable must be properly ordered before using `polr(...)`.  Also, all parameters generated by polr(...) need to have signs reversed, except for $\beta_{j0}$.**
+
+```{r}
+levels(wheat$type)
+wheat$type <- factor(wheat$type, levels=c('Scab', 'Sprout', 'Healthy'))
+levels(wheat$type)
+
+library(MASS)
+wheat_fit_polr <- polr(formula=type~class + density + hardness + size + weight + moisture,
+                       data=wheat, method="logistic")
+summary(wheat_fit_polr)
+```
+
+We would interpret this as:
+$$logit[P(Y \le j)] = \beta_{j0} -0.17I(SRW) - 13.51 density -0.01 hardness + 0.29 size ... $$
+
+with $\beta_{10} = 17.57$ and $\beta_{20} = 20.04$.  The `t value` column is the Wald statistic (ie. compare to 1.96).  We can also do LRTs with `Anova(...)`:
+
+```{r}
+Anova(wheat_fit_polr)
+```
+
+We can also predict probabilities and classes. ** However, `predict(...)` does not calculate the standard errors that would be needed in order to calculate Wald confidence intervals for $\pi_j$**.
+
+```{r}
+wheat_classes_pi_hat <- predict(wheat_fit_polr, type='probs')
+wheat_classes <- predict(wheat_fit_polr, type='class')
+head(data.frame(wheat_classes_pi_hat,wheat_classes))
+```
+
+\subsection{Odds Ratio}
+
+Our odds ratio interpretation as $exp(\beta_{j0} + \beta_1 x_1 + ... \beta_p x_p)$ is natural, except that we are using cumulative probabilities. Recall: 
+$$ logit[P(Y \le j)] = log\bigg[\frac{P(Y \le j)}{1-P(Y \le j)}\bigg] = \beta_{j0} + \beta_1 x_1 + ... \beta_p x_p$$
+
+As usual, for a c-unit increase in $x_1$:
+$$ OR = \frac{Odds_{x_1+c}(Y \le j)}{Odds_{x_1}(Y \le j} = exp(c\beta_1)$$
+
+The interpretation is that the odds of $Y \le j$ vs. $Y > j$ change by $exp(c\beta_1)$ for every c-unit increase in $x_1$, holding all other variables constant.  Due to the nature of the proportional odds model, this is the same result *no matter which category is used for j*.
+
+```{r}
+head(wheat)
+levels(wheat$type)
+c_value  # we calculated the standard deviations for each parameter to use as our c-unit
+or_increase <- exp(c_value * (-coef(wheat_fit_polr)))  # remember we have to take negative of the coefficients
+or_decrease <- 1 / or_increase
+```
+
+Interpretations: in all cases, "holding all other variables constant"
+
+- the estimated odds of a scab vs. sprout or healthy are 0.84 times as large for soft rather than hard wheat.  
+- the estimated odds of a scab vs. sprout or healthy are 0.36 times as large for a c=1sd increase in weight.
+- the estimated odds of a scab vs. sprout or healthy are 5.89 times as large for a c=1sd decrease in density.
+- the estimated odds of a scab vs. sprout or healthy are 2.74 times as large for a c=1sd decrease in weight.
+
+Also, due to definition of proportional odds model, each of the following statements could also apply to "... a scab or sprout vs. healthy" (ie. comparing different class threshholds).
+
+It is possible do do Wald and LR Intervals for the Odds Ratio.
+
+```{r}
+(ci_betas_polr <- confint(wheat_fit_polr, level=0.95))
+(or_increase_ci <- exp(c_value * (-ci_betas_polr)) ) # note these are in reversed upper/lower order
+(or_decrease_ci <- 1/exp(c_value * (-ci_betas_polr)))  # note these are in reversed upper/lower order
+```
+
+Interpretation: Holding all other variables constant, with 95% confidence, the odds of a scab instead of a sprout or healthy response increase by between 3.87 and 9.36 times for every c=1sd decrease in density.
+
+
