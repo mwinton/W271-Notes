@@ -12,127 +12,329 @@ geometry: margin=1in
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 options(digits=4)
+library(car)
+library(dplyr)
 ```
 
-## Introduction
+## Introduction to Time Series Analysis
 
-Observations that have been collected over fixed sampling intervals are _historical time series_.  They are treated as realizations of sequences of random variables.  
+In classical linear regression, we focus on using independent variables to characterize a dependent variable.  In other words, we would be characterizing the conditional mean function of the dependent variable, conditional on the independent variables, relying on iid assumption.
 
+In univariate TSA, we focus on characterizing one series, with observations that are typically dependent on each other.  It's that dependency that we want to characterize.  We're analyzing $T$ observations of a single variable, so we have a $Tx1$ vector (contrast to the $nxk$ matrix for CLR).
+
+### Terminology
+
+In theory a time series begins in infinite past and continues into infinite future (important for deriving properties of TS models).
+
+A _Stochastic Process_ is a statistical phenomenon that evolves according to probability laws.   A _time series_ is a discrete realization of this "data generating process," a set of observations generated sequentially in time. Time indices are $t_1, t_2, ... t_N$ and observations are $z(t_1)...z(t_N)$. If they're equidistant, we simplify to $z_1, ... z_N$.
+
+A _Discrete-Time Stochastic Process_ is a sequence of random variables (e.g. $\{... z_{-1}, z_0, z_1, ... z_N\}$).  A finite subset of this realization (e.g. $\{z_1, ... z_N\}$) is called a _sample path_, which can be considered a collection of observations.
+
+**IMPORTANT:** in CLR, a cross-section of observations is considered _many realizations or draws_.  In time series analysis, a collection of observations is considered only _one draw_ or _one realization_.
+
+
+### General Approach to TSA
+
+  1. Based on theory/subject-matter knowledge, consider a useful class of models
+  2. Collect and clean data
+  3. Perform ETSDA (graphical and tabular methods)
+  4. Examine and statistically test whether the series is _stationary_.
+  5. If it's not, transform it (e.g. detrending, seasonality removal, log, difference transforms)
+  6. Model using a _stationary_ or _integrated_ TS model.
+  7. Examine validity of model's assumptions.
+  8. Among valid models, choose the best one.
+  9. Conduct forecasting!
+   
+## Common Empirical TS Patterns
+
+Pattern 1: Trend with flutuation around the trend
+
+  - Systematic upward trend
+  - Seasonality around trend (also visible in box plots - e.g. by month)
+  - Fluctuation increases over time
+
+Pattern 2: Change in Structure
+
+  - Long period of range-bounded fluctuation, followed by a consistent upward trend w/ variation
+  
+Pattern 3: Variation around Stable Mean
+
+  - Fluctuation generally stable around a fixed mean
+  - Spikes in variation from time to time ("volatlity clustering")
+  
+Pattern 4: Periodicity
+
+  - Periodicity - cycles appear with fixed frequency  
+
+
+## Simple TS Models
+
+### Model 1: white noise
+
+  - collection of uncorrelated random variables with mean=0 and some variance.
+  - "Gaussian WN": these RVs are iid and have standard normal distribution (popular model)
+  - the most fundamental component in TS modeling and assumption testing
+  - a deterministic dynamic model can be transformed into a deterministic stochastic model using the addition of white noise.
+  - histogram is a useful tool, but shouldn't be used alone since it loses the time element!
+  
+  
+### Model 2: symmetric, equal-weight, moving average model
+
+  - common way to smooth / remove volatility from a TS where white noise was introduced
+  - can be used to generate dependency between observations
+  - centered moving average can smooth out variation in order to make trend visible
+  - length of moving average can be chosen to smooth out seasonality
+  
+### Model 3: autoregressive models (specifically, order p=2)
+
+  - establishes relationship between observed values and past values and white noise component
+  - we attach a coefficient to past values that dampens over time
+  - model appears fairly symmetric (histogram)
+  
+### Model 4: random walk and deterministic trend
+
+  - model includes a deterministic trend, along with some random walk along the way
+  - random walk can happen with or without drift (e.g. upward drift of historical prices for a stock)
+  - these models are generally very persistent  
+  
+## Statistical Principles and Measures of Dependency
+
+A complete description of a TS as a collection of $k$ random variables requires a joint distribution function:
+
+$$ F(c_1, c_2,...c_n) = P(x_{t_1} \le c_1, x_{t_2} \le c_2, ...x_{t_n} \le c_n)$$
+Characterizing this in its general form is impossible.  A single realization of a TS doesn't offer enough information to characterize the underlying joint distribution function.
+
+One of the most important probabilitistic features is the dependency structure embedded in joint distributions.
+
+The _mean function_ of a stochastic process is:
+
+$$ \mu_x(t) = E(x_t) = \int_{-\infty}^{\infty}x_tf_t(x_t)dt$$
+If the function is contact over time, then the underlying stochastic process is said to be _stationary in the mean_.  The _variance_ for a TS that is stationary in the mean is:
+
+$$ \sigma_x^2(t) = E(x_t - \mu)^t = \int_{\infty}^{\infty} (x_t - \mu)^2f_t(x_t)dx_t$$
+Note that both mean and variance are functions of the index ($t_i$).  However, it's impossible to estimate the different variances at different points in time with only a single TS (ie. single realization of the SP).  As a result, another popular assumption is _stationarity of variance_.  
+
+In the context of TSA, we speak of covariance and correlation as between multiple RVs in the same series, so we refer to them as _autocovariance_ and _autocorrelation_.  The autocovariance function (avcf) is:
+
+$$ \gamma_x(s,t) = cov(x_s, x_t) = E[(x_s-\mu_s)(x_t-\mu_t)] \forall s,t$$ 
+As before, we know that $ \gamma_x(s,t) = \gamma_x(t,s) $ and $ \gamma_x(s,s)=cov(x_s,x_s)=var(x_s)$.
+
+Stationarity of mean, variance, and autocovariance produce a large class of _stationary TS models_.
+
+### Second-Order Stationarity Assumption
+
+If a TS is "second-order stationary", that means it's stationary in both mean and variance, so $\mu_t = \mu$ and $\sigma_t^2 = \sigma^2$ for all $t$.  Then we write the autocovariance formula as:
+
+$$ \gamma_k = E[(x_t - \mu)(x_{t+k} - \mu)]$$
+Then the _autocorrelation_ function (acf) is:
+
+$$ \rho_k = \frac{\gamma_k}{\sigma^2}$$
+If $k=0$, then this shows that $rho_k=1$.  **The dependence between values of a TS is important, so it's important to estimate autocorrelation with precision.**
+
+We use _moment principles_ to estimate values of avcf and acf from their sample equivalents.  Note the division by $T$, the total number of measurements (not $t$).
+
+$$ \text{sample avcf: } \hat{\gamma_k} = \frac{1}{T} \sum_{t=1}^{T-k} (x_t - \hat{x})(x_{t+k} - \hat{x})$$
+
+$$ \text{sample acf: } \frac{\hat{\gamma_k}}{\hat{\gamma_0}} = \frac{\frac{1}{T} \sum_{t=1}^{T-k} (x_t - \hat{x})(x_{t+k} - \hat{x})}{\frac{1}{T} \sum_{t=1}^{T} (x_t - \hat{x})^2}$$
+
+### Partial Autocorrelation
+
+This is a conditional correlation, conditional on other explanatory variables being accounted for in a TS model.  The partial autocorrelation of a process $z_t$ at lag $k$ ($\phi_{kk}$) is the autocorrelation between $z_t$ and $z_{t-k}$, adjusting for effects of variables $z_{t-1}, z_{t-2}, ... z_{t-k+1}$.  In other words, if you did a linear regression of $z_t$ on all of the other $z$ variables, $\phi_{kk}$ would be the coefficient for $z_{t-k}$.  (Note: this kind of regression would be called an _autoregression_.)
+
+**The partial autocorrelation summarizes the dynamics of a process, and as such it's a powerful tool for identifying the _order $p$_ of an $AR(p)$ model.**
+
+
+### Strict vs. Weak Stationarity
+
+A time series $x_t$ is _strictly_ stationary if the distribution is **unchanged** for any time shift.  This isn't practical for any modeling. Mathematically:
+
+$$ F(x_{t_1}...x_{t_n}) = F(x_{t_1+m}...x_{t_n+m}) \forall t_1..t_n\ and\ m$$
+A _weak stationarity_  (aka. _second-order stationarity_) is more practical.  A time series $x_t$ is _weakly_ stationary if its mean and variance are stationary, and its $cov(x_t,x_{t+k})$ only depends on $k$ (can be written as $\gamma(k)$).
+
+### More on White Noise
+
+Recall that the discrete white noise process ($w_t$) is a sequence of RVs indexed by $t$ that are iid and have:
+
+$$E(w_t) = \mu_w=0$$
+
+$$ \gamma_k = cov(w_t, w_{t+k}) = \begin{cases} \sigma_w^2,k = 0 \\ 0, k \ne0\\ \end{cases} $$
+$$ \rho_k = \begin{cases} 1, k=0 \\ 0, k \ne 0\end{cases}$$
 ```{r}
-# load sample dataset
-data(AirPassengers)
-(ap <- AirPassengers)
-class(ap)  # Note there's a specific class called ts
-
-start(ap)
-end(ap)
-frequency(ap)
-
-# rollups by year
-aggregate(ap)
-
-```
-
-Several common plots are built in:
-```{r}
-# raw time series
-plot(ap, ylab='Passengers (1000s)')
-
-# annual total counts
-plot(aggregate(ap), lty=2, ylab='Annual Total Passengers (1000s)')
-
-# box plots by month
-boxplot(ap ~ cycle(ap), ylab='Passengers (1000s)')
-```
-
-The simplest model for a (long-term) _trend_ is often a linear approximation.
-
-Converting dataframe to time series:
-
-```{r}
-# load data from internet and transform to a ts object
-url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/Maine.dat'
-ME_month_df <- read.table(url, header=TRUE)
-head(ME_month_df)
-(ME_month_ts <- ts(ME_month_df$unemploy, start=c(1996, 1), freq=12))
-(ME_annual_ts <- aggregate(ME_month_ts, FUN=mean))  # without FUN=mean, we get a sum by default
-
-plot(ME_month_ts, ylab='Unemployed (%)')
-plot(ME_annual_ts, ylab='Unemployed (%)')
-```
-
-We can extract just a portion of the ts:
-```{r}
-# Extract all February and August numbers
-(ME_feb <- window(ME_month_ts, start=c(1996,2), freq=TRUE))
-(ME_aug <- window(ME_month_ts, start=c(1996,8), freq=TRUE))
-# Compare Feb, Aug to average monthly unemployment (from entire ts)
-(feb_ratio <- mean(ME_feb) / mean(ME_month_ts))
-(aug_ratio <- mean(ME_aug) / mean(ME_month_ts))
-```
-
-## Multiple time series:
-```{r}
-url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/cbe.dat'
-cbe_df <- read.table(url, header=TRUE)
-head(cbe_df)
-
-choc_ts <- ts(cbe_df$choc, start=1958, freq=12)
-beer_ts <- ts(cbe_df$beer, start=1958, freq=12)
-elect_ts <- ts(cbe_df$elec, start=1958, freq=12)
-
-# cool trick to use cbind to join plots together on shared t axis
-plot(cbind(choc_ts, beer_ts, elect_ts))
-
-# intersection of multiple time series
-isect_ap_elec <- ts.intersect(ap, elect_ts)
-start(isect_ap_elec)
-end(isect_ap_elec)
-head(isect_ap_elec)
-
-# plot both
-layout(1:2)
-plot(isect_ap_elec[,2], ylab="Airline Passengers")
-plot(isect_ap_elec[,1], ylab="AUS Electricity Production")
-
-# need to convert to vectors to do scatterplot
+# White Noise simulation
+sim <- rnorm(500, mean=0, sd=1)
 layout(1:1)
-plot(as.vector(isect_ap_elec[,1]), as.vector(isect_ap_elec[,2]),
-     xlab="AUS Electricity Production", ylab="Airline Passengers")
-abline(lm(as.vector(isect_ap_elec[,2]) ~ isect_ap_elec[,1]), lty=2)
+plot(ts(sim))
+hist(sim)
+acf(ts(sim))
 ```
 
-From this example, we see how easy it is to find correlation in two completely unrelated things.  Because of this, its common to remove _trends_ and _seasonal variation_ before doing multiple time series analysis.  This could mean working with residuals from a regression model that has terms to represent them.
+As expected, the series appears random, and the ACF shows no significant correlation with any lags.
 
-## Stochastic Trends in Financial Data
+### Stochastic Model with Deterministic Linear Trend
 
-Day-to-day changes can be hard to explain, and it may be unrealistic to assume any _deterministic_ component in a time series model.  _Stochastic trends_ can sometimes be fit with _random walk_ models.  They're common in financial data.  There are also statistical tests to test for stochastic trends.
+Consider a model with a deterministic linear trend: $x_t = a + bt + w_t$, where $w_t$ is a white noise process with mean=0 and variance = $\sigma_w^2$.  The expected value of $x_t$ is:
+
+$$ E(x_t) = E(\beta_0 + \beta_1 t + w_t) = \beta_0 + \beta_1 t + E(w_t) = \beta_0 + \beta_1 t$$
+$$ Var(x_t) = Var(\beta_0 + \beta_1 t + w_t) = Var(w_t) = \sigma_w^2$$
+This means that the expected value (mean) is changing with time, but the variance is **not**.
+
+To look at correlation:
+
+$$ Cov(x_t, x_{t-1}) = Cov(\beta_0 + \beta_1 t + w_t, \beta_0 + \beta_1 (t-1) + w_{t-1}) = Cov(w_t,w_{t-1})= 0 $$
+Therefore, the stochastic model with a deterministic linear trend is not (strictly or weakly) stationary, but it can be transformed into a stationary model.
 
 ```{r}
-url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/pounds_nz.dat'
-exchange_df <- read.table(url, header=TRUE)
-head(exchange_df)
-exchange_ts <- ts(exchange_df$xrate, start=1991, freq=4)
-plot(exchange_ts, xlab='Quarter', ylab='Exchange Rate (NZ$ to GBP)')
-```
+# run a simulation
+beta_0 <- 1
+beta_1 <- 0.5
+sigma_w <- 10
+t <- seq(1,500)
+w_t <- rnorm(500, 0, sigma_w)
+x2 <- beta_0 + beta_1 * t + w_t
+x2_ts <- ts(x2)
 
-```{r}
-url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/global.dat'
-global_df <- scan(url)
-head(global_df)
-global_ts <- ts(global_df, start=c(1856, 1), end=c(2005, 12), freq=12)
-# create ts for average annual value
-global_annual <- aggregate(global_ts, FUN=mean)
-
-# plot time series
-layout(1:2)
-plot(global_ts)
-plot(global_annual)
-
-# plot subset of our ts
-global_recent_ts <- window(global_ts, start=c(1970, 1), end=c(2005, 12))
-recent_time_axis <- time(global_recent_ts)  # for regression
+# plot
 layout(1:1)
-plot(global_recent_ts, ylab='Temp Increase (C)')
-abline(reg=lm(global_recent_ts ~ recent_time_axis), lty=2)
+plot(x2_ts, main="Simulation: Stochastic Model with Deterministic Linear Trend")
+acf(x2_ts, main="Autocorrelation with Lags")
+lag.plot(x2_ts, lags=9, main="Autocorrelation of Lags")
 ```
+
+As expected, we see the mean changes with time, the variance doesn't, and the ACF plot shows that the series has _very high persistence_ (ie. highly correlated with lags).  The scatterplot also show clear correlation.
+
+### Moving Average Model (Order = 1)
+
+A MA(1) model takes the form: $x_t = \alpha w_t + \beta w_{t-1}$ where $w_t$ is a discrete white noise series with mean=0 and variance $\sigma_w^2$.  Sometimes the $w_{t-1}$ term is referred to as a "shock."  The expected value of $x_t$ is: 
+
+$$ E(x_t) = E(\alpha w_t + \beta w_{t-1}) = \alpha E(w_t) + \beta E(w_{t-1}) = 0$$
+The autocorrelation function is:
+$$ \rho_k =
+\begin{cases}
+  1, k=0 \\ 
+  \frac{\sum_{i=0}^{q-k} \beta_i \beta_{i+k}}{\sum_{i=0}^{q} \beta_i^2}, k=1...q\\ 
+  0, k>q
+\end{cases}$$
+```{r}
+# run a simulation
+alpha <- 1
+beta <- 0.8
+sigma_w <- 10
+w_t <- rnorm(500, 0, sigma_w)  
+
+x3 <- vector()
+x3[1] <- w_t[1]
+for (t in 2:500) {
+  x3[t] <- alpha * w_t[t] + beta * w_t[t-1]
+}
+x3_ts <- ts(x3)
+
+# plot
+layout(1:1)
+plot(x3_ts, main="Simulation: Moving Average Model (Order=1)")
+acf(x3_ts, main="Autocorrelation with Lags")
+lag.plot(x3_ts, lags=9, main="Autocorrelation of Lags")
+```
+
+A distinguishing feature of this model is that the ACF abruptly drops off after the $order=q$ lags.  The scatterplots show some correlation for $lag=1$, but none after that.
+
+### Autoregressive Model (Order = 1)
+
+An AR(1) model takes the form: $x_t = \alpha x_{t-1} + w_t$ where $w_t$ is a discrete white noise series with mean=0 and variance $\sigma_w^2$.  The expected value of $x_t$ is: 
+
+$$ E(x_t) = E(\alpha x_{t-1} + w_t) = \alpha E(x_{t-1}) + E(w_t) = \alpha E(x_{t-1}) = 0$$
+Because of recursive substitution, an AR(1) process can be written as a linear process, in terms of the sum of infinite white noises, which will help in the derivation of the autocovariance:
+$$ x_t = \sum_{i=0}^\infty \alpha^i w_{t-i}$$
+$$ \gamma_k = Cov(x_t, x_{t+k}) = Cov (\sum_{i=0}^\infty \alpha^i w_{t-i}, \sum_{j=0}^\infty \alpha^j w_{t+k-j}) = \sum_{j=k+i}^\infty \alpha^i \alpha^j Cov(w_{t-i}, w_{t+k-j}) = \alpha^k \sigma_w^2 \sum_{i=0}^\infty \alpha^{2i} = \frac{\alpha^k \sigma_w^2}{(1-\alpha^2)}$$
+
+A theoretical $AR(1)$ model with a _positive correlation_ decays exponentially.  An $AR(1)$ model with a _negative correlation_ will oscillate between positive and negative correlation due to the $\alpha^k$ term (taking the $k-th$ power of a negative number).
+
+```{r}
+# simulate shape of the ACF curve for +/- alphas
+rho <- function(k, alpha) {
+  alpha^k / (1 - alpha^2)
+}
+plot(0:10, rho(0:10, alpha=0.7), type='b', main='alpha=0.7')
+plot(0:10, rho(0:10, alpha=-0.7), type='b', main='alpha=-0.7')
+abline(h=0, lty=2)
+```
+
+```{r}
+# run a simulation
+alpha <- 0.8
+sigma_w <- 1
+w_t <- rnorm(500, 0, sigma_w)
+
+x4 <- vector()
+x4[1] <- w_t[1]
+for (t in 2:500) {
+  x4[t] <- alpha * x4[t-1] + w_t[t]
+}
+x4_ts <- ts(x4)
+
+
+# plot
+plot(x4_ts, main="Simulation: Autoregressive Model (Order=1)")
+acf(x4_ts, main="Autocorrelation with Lags")
+lag.plot(x4_ts, lags=9, main="Autocorrelation of Lags")
+```
+
+Note the exponential decay on the ACF plot behaves similarly to the simulated plots above.
+
+
+## Example 1: Wave Height
+
+Example comes from Cowper. 
+
+```{r}
+# plot ts over entire 39.7 seconds (freq=0.1 sec)
+
+# plot ts over first 6 seconds
+```
+  
+Observations: Data doesn't seem to show any trend or seasonal component, so it should be appropriate to assume it's a realization of a stationary TS process.  We also don't see any outliers.  It appears to fluctuate around a constant mean with approximately constant variance.  We see quasi-periodicity, but *not* a fixed frequency.
+
+Another visual way to examine dependency structure of a series is a plot of scatterplot matrix looking at autocorrelation with different lag values $k=1, k=2, ...$.
+
+```{r}
+
+```
+
+Also, it's important to plot the "correlogram" of $acf$ and $avcf$ vs. lag using the R function `acf`.
+
+```{r}
+
+```
+
+_Observe the wavelike shape that resembles a shrinking $cos$ function.  This is typical of TS generated by an $AR(2)$ process._  
+
+The dotted lines represent the 95% CI for the ACF.  Note that the CI of each of the autocorrelations is the same, independent of lag.  This is because of the property of the AR model that both conditional and unconditional variances are constant.  The CI (which tightens with sample size $n$) is calculated as:
+
+$$ CI: -\frac{1}{n} \pm \frac{2}{\sqrt{n}}$$
+While, in theory, points outside the 95% CI would be evidence against the null hypothesis that the correlation at lag $k$ is zero, we need to be careful about interpretations of _multiple hypothesis tests_.  Even if all autocorrelations are 0, then by chance 5% of the estimates could still fall outside the CI.
+
+## Example 2: Initial Jobless Claims
+
+Downloaded data from [MacroTrends.net](http://www.macrotrends.net/1365/jobless-claims-historical-chart).  Note that the async lectures plotted weekly data; this data is monthly.
+
+```{r}
+#plot ts
+unemployment_df <- read.csv('jobless-claims-historical-chart.csv', skip=13, header=TRUE)
+unemployment_df <- unemployment_df %>% filter(value>0) %>% mutate(thousands=value/1000)
+unemployment_ts <- ts(unemployment_df$thousands, start=c(1967,1), freq=12)
+plot(unemployment_ts, xlab="Monthly Series", ylab="First Time Unemployment Claims (in Thousands)")
+```
+
+Observe that series appears very _persistent_, showing fairly long term upwards and/or downwards trends.  This suggests correlation with its own lags is probably high.  It also suggests that stationarity of mean, variance, and autocorrelation may not be satisified.
+
+```{r}
+# plot scm against its own lags
+lag.plot(unemployment_ts, lags=9, main="Autocorrelation of First Time Jobless Claims (Monthly)")
+
+# plot acf 
+acf(unemployment_ts, type='correlation', main="Autocorrelation - First Time Jobless Claims",
+    xlab="Lag (Months)")
+```
+
+The scatterplot matrix shows strong correlation even up to lag $k=9$ (weeks).
+
+The correlogram shows high $acf$ even at lag $k=30$ (weeks).
