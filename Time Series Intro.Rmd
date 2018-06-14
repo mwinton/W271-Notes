@@ -109,7 +109,7 @@ One of the most important probabilitistic features is the dependency structure e
 The _mean function_ of a stochastic process is:
 
 $$ \mu_x(t) = E(x_t) = \int_{-\infty}^{\infty}x_tf_t(x_t)dt$$
-If the function is contact over time, then the underlying stochastic process is said to be _stationary in the mean_.  The _variance_ for a TS that is stationary in the mean is:
+If the function is constant over time, then the underlying stochastic process is said to be _stationary in the mean_.  The _variance_ for a TS that is stationary in the mean is:
 
 $$ \sigma_x^2(t) = E(x_t - \mu)^t = \int_{\infty}^{\infty} (x_t - \mu)^2f_t(x_t)dx_t$$
 Note that both mean and variance are functions of the index ($t_i$).  However, it's impossible to estimate the different variances at different points in time with only a single TS (ie. single realization of the SP).  As a result, another popular assumption is _stationarity of variance_.  
@@ -117,25 +117,25 @@ Note that both mean and variance are functions of the index ($t_i$).  However, i
 In the context of TSA, we speak of covariance and correlation as between multiple RVs in the same series, so we refer to them as _autocovariance_ and _autocorrelation_.  The autocovariance function (avcf) is:
 
 $$ \gamma_x(s,t) = cov(x_s, x_t) = E[(x_s-\mu_s)(x_t-\mu_t)] \forall s,t$$ 
-As before, we know that $ \gamma_x(s,t) = \gamma_x(t,s) $ and $ \gamma_x(s,s)=cov(x_s,x_s)=var(x_s)$.
+By properties of covariance, we know that $\gamma_x(s,t) = \gamma_x(t,s)$ and $\gamma_x(s,s)=cov(x_s,x_s)=var(x_s)$.
 
 Stationarity of mean, variance, and autocovariance produce a large class of _stationary TS models_.
 
 ### Second-Order Stationarity Assumption
 
-If a TS is "second-order stationary", that means it's stationary in both mean and variance, so $\mu_t = \mu$ and $\sigma_t^2 = \sigma^2$ for all $t$.  Then we write the autocovariance formula as:
+If a TS is "second-order stationary", that means it's stationary in both mean and variance, so $\mu_t = \mu$ and $\sigma_t^2 = \sigma^2$ for all $t$.  Then we write the _autocovariance_ function as:
 
-$$ \gamma_k = E[(x_t - \mu)(x_{t+k} - \mu)]$$
+$$ \gamma_k = Cov(x_t, x_{t+k}) = E[(x_t - \mu)(x_{t+k} - \mu)]$$
 Then the _autocorrelation_ function (acf) is:
 
-$$ \rho_k = \frac{\gamma_k}{\sigma^2}$$
-If $k=0$, then this shows that $rho_k=1$.  **The dependence between values of a TS is important, so it's important to estimate autocorrelation with precision.**
+$$ \rho_k = \frac{\gamma_k}{\gamma_0} = \frac{\gamma_k}{\sigma^2} $$
+If $k=0$, then it follows that $\gamma_k = \sigma^2$ and $rho_k=1$.  **The dependence between values of a TS is important, so it's important to estimate autocorrelation with precision.**
 
-We use _moment principles_ to estimate values of avcf and acf from their sample equivalents.  Note the division by $T$, the total number of measurements (not $t$).
+We use _moment principles_ to estimate values of acvf and acf from their sample equivalents.  Note the division by $T$, the total number of measurements (not $t$).
 
-$$ \text{sample avcf: } \hat{\gamma_k} = \frac{1}{T} \sum_{t=1}^{T-k} (x_t - \hat{x})(x_{t+k} - \hat{x})$$
+$$ \text{sample acvf: } \hat{\gamma_k} = \frac{1}{T} \sum_{t=1}^{T-k} (x_t - \hat{x})(x_{t+k} - \hat{x})$$
 
-$$ \text{sample acf: } \frac{\hat{\gamma_k}}{\hat{\gamma_0}} = \frac{\frac{1}{T} \sum_{t=1}^{T-k} (x_t - \hat{x})(x_{t+k} - \hat{x})}{\frac{1}{T} \sum_{t=1}^{T} (x_t - \hat{x})^2}$$
+$$ \text{sample acf: } \hat{\rho_k} = \frac{\hat{\gamma_k}}{\hat{\gamma_0}} = \frac{\frac{1}{T} \sum_{t=1}^{T-k} (x_t - \hat{x})(x_{t+k} - \hat{x})}{\frac{1}{T} \sum_{t=1}^{T} (x_t - \hat{x})^2}$$
 
 ### Partial Autocorrelation
 
@@ -151,7 +151,7 @@ A time series $x_t$ is _strictly_ stationary if the distribution is **unchanged*
 $$ F(x_{t_1}...x_{t_n}) = F(x_{t_1+m}...x_{t_n+m}) \forall t_1..t_n\ and\ m$$
 A _weak stationarity_  (aka. _second-order stationarity_) is more practical.  A time series $x_t$ is _weakly_ stationary if its mean and variance are stationary, and its $cov(x_t,x_{t+k})$ only depends on $k$ (can be written as $\gamma(k)$).
 
-### More on White Noise
+### White Noise Model
 
 Recall that the discrete white noise process ($w_t$) is a sequence of RVs indexed by $t$ that are iid and have:
 
@@ -169,6 +169,8 @@ acf(ts(sim))
 ```
 
 As expected, the series appears random, and the ACF shows no significant correlation with any lags.
+
+Discrete White Noise is important because we use it as a model for residuals. When we try to fit other time series models to our observed data, we use Discrete White Noise to confirm that we have eliminated any remaining serial correlation from the residuals, resulting in a good model fit.
 
 ### Stochastic Model with Deterministic Linear Trend
 
@@ -239,24 +241,42 @@ A distinguishing feature of this model is that the ACF abruptly drops off after 
 
 ### Autoregressive Model (Order = 1)
 
-An AR(1) model takes the form: $x_t = \alpha x_{t-1} + w_t$ where $w_t$ is a discrete white noise series with mean=0 and variance $\sigma_w^2$.  The expected value of $x_t$ is: 
+The AR(1) model takes the form: 
 
-$$ E(x_t) = E(\alpha x_{t-1} + w_t) = \alpha E(x_{t-1}) + E(w_t) = \alpha E(x_{t-1}) = 0$$
-Because of recursive substitution, an AR(1) process can be written as a linear process, in terms of the sum of infinite white noises, which will help in the derivation of the autocovariance:
+$$x_t = \alpha x_{t-1} + w_t$$ 
+
+where $w_t$ is a discrete white noise series with mean=0 and variance $\sigma_w^2$.  Because of recursive substitution, an AR(1) process can be written as a linear process, in terms of the sum of infinite white noises:
+
+$$ x_t =  \alpha x_{t-1} + w_t  = \alpha (\alpha x_{t-2} + w_{t-1}) + w_t = \alpha (\alpha (\alpha x_{t-3} + w_{t-2}) + w_{t-1}) + w_t = ...$$
+The result can be written more cleanly as:
+
 $$ x_t = \sum_{i=0}^\infty \alpha^i w_{t-i}$$
-$$ \gamma_k = Cov(x_t, x_{t+k}) = Cov (\sum_{i=0}^\infty \alpha^i w_{t-i}, \sum_{j=0}^\infty \alpha^j w_{t+k-j}) = \sum_{j=k+i}^\infty \alpha^i \alpha^j Cov(w_{t-i}, w_{t+k-j}) = \alpha^k \sigma_w^2 \sum_{i=0}^\infty \alpha^{2i} = \frac{\alpha^k \sigma_w^2}{(1-\alpha^2)}$$
 
-A theoretical $AR(1)$ model with a _positive correlation_ decays exponentially.  An $AR(1)$ model with a _negative correlation_ will oscillate between positive and negative correlation due to the $\alpha^k$ term (taking the $k-th$ power of a negative number).
+Using that form, it's easy to calculate the expected value of $x_t$: 
+
+$$ E(x_t) = E(\sum_{i=0}^\infty \alpha^i w_{t-i}) = \sum_{i=0}^\infty E(\alpha^i w_{t-i}) = \sum_{i=0}^\infty \alpha^i E(w_{t-i}) = 0$$
+
+The linear form of $x_t$ also leads to the autocovariance:
+
+$$ \gamma_k = Cov(x_t, x_{t+k}) = Cov (\sum_{i=0}^\infty \alpha^i w_{t-i}, \sum_{j=0}^\infty \alpha^j w_{t+k-j}) = \sum_{j=k+i}^\infty \alpha^i \alpha^j Cov(w_{t-i}, w_{t+k-j}) = \alpha^k \sigma^2 \sum_{i=0}^\infty \alpha^{2i} = \frac{\alpha^k \sigma^2}{(1-\alpha^2)}$$
+
+From this equation, we can get the autocorrelation function:
+
+$$ \rho_k(t) =\frac{\gamma_k}{\gamma_0} = \bigg[\frac{\alpha^k \sigma^2}{(1-\alpha^2)}\bigg]\bigg[\frac{\alpha^0 \sigma^2}{(1-\alpha^2)}\bigg]^{-1} = \alpha^k\ (for\ k \ge 0, | \alpha| <1)$$
+
+A theoretical $AR(1)$ model with a _positive correlation_ decays exponentially.  An $AR(1)$ model with a _negative correlation_ will oscillate between positive and negative correlation due to the $\alpha^k$ term (taking the $k-th$ power of a negative number).  The smaller the alpha, the more quickly it decays.
 
 ```{r}
 # simulate shape of the ACF curve for +/- alphas
 rho <- function(k, alpha) {
-  alpha^k / (1 - alpha^2)
+  alpha^k 
 }
 plot(0:10, rho(0:10, alpha=0.7), type='b', main='alpha=0.7')
 plot(0:10, rho(0:10, alpha=-0.7), type='b', main='alpha=-0.7')
 abline(h=0, lty=2)
 ```
+
+Now run a simulation:
 
 ```{r}
 # run a simulation
@@ -284,6 +304,27 @@ The dotted lines represent the 95% CI for the ACF.  Note that the CI of each of 
 
 $$ CI: -\frac{1}{n} \pm \frac{2}{\sqrt{n}}$$
 While, in theory, points outside the 95% CI would be evidence against the null hypothesis that the correlation at lag $k$ is zero, we need to be careful about interpretations of _multiple hypothesis tests_.  Even if all autocorrelations are 0, then by chance 5% of the estimates could still fall outside the CI.
+
+### Random Walk Model
+
+The Random Walk model is a special case of $AR(1)$, with $\alpha=1$.
+
+As with the general $AR(1)$ case, $E(x_t)=0$.  The variance is:
+
+$$ Var(x_t) = t \sigma^2$$
+
+The autocovariance simplifies to: 
+
+$$\gamma_k = t \sigma^2$$
+
+Because autocovariance is a function of time, this model is _nonstationary_.  Because of this, a random walk is suitable only for short-term predictions.
+
+The autocorrelation is:
+
+$$\rho_k(t) = \frac{Cov(x_t, x_{t+k})}{\sqrt{Var(x_t)Var(x_{t+k})}} = 
+\frac{t \sigma^2}{\sqrt{t\sigma^2(t+k)\sigma^2}} = \frac{1}{\sqrt{1+k/t}}$$
+
+
 
 ## Example 1: Wave Height
 
