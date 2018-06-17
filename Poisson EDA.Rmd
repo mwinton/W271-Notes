@@ -116,14 +116,14 @@ summary(poisson_fit)
 
 *Observations:* We can look at the summary to see which are the (omitted) base cases.  In this case, it's `nation=CAN` and `sector=AGR`.   Also, remember that the coefficients are for the *linear predictor*, ie. for the *log*(counts).  We have to exponentiate to get effect on the counts.
 
-We can also pull out residual device from the model and calculate a "goodness of fit" p-value.  The deviance and degrees of freedome come from the fit:
+We can also pull out residual device from the model and calculate a "goodness of fit" p-value.  The deviance and degrees of freedome come from the fit.  The null hypothesis $H_0$ is that the data are consistent with the specified distribution; $H_a$ is that they are not.
 
 ```{r}
 resid_dev <- with(poisson_fit, cbind(resid_deviance = deviance, df = df.residual,
                                      p = pchisq(deviance, df.residual, lower.tail = FALSE)))
 round(resid_dev, 4)
 ```
-Because the goodness of fit $\chi^2$ test is statistically significant, we can conclude the model does not fit the data particularly well.
+Because the goodness of fit $\chi^2$ test is statistically significant, we reject the null hypothesis and conclude the model does not fit the data particularly well.  
 
 Let's look at the frequency table.
 
