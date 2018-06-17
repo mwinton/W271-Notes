@@ -1,5 +1,5 @@
 ---
-title: "Likelihood Notes - Categorical Data"
+title: "Binary Response - Categorical Data"
 author: "Michael Winton"
 date: \today
 output: pdf_document

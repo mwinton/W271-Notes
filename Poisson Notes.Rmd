@@ -14,7 +14,7 @@ library(knitr)
 opts_chunk$set(tidy.opts=list(width.cutoff=70), tidy=TRUE, fig.align="center")
 ```
 
-\section{Poisson Responses}
+## Poisson Responses
 
 Poisson responses can be used to model discrete "counts" in a fixed time.  The model assumes (1) all counts taken on some process have the same underlying intensity, and (2) the period of time for each observation is constant.  The Poisson PMF is:
 
@@ -39,7 +39,7 @@ $$\hat{\mu} = \frac{\sum_{k=1}^n y_k}{n}$$
 The MLE for variance is:
 $$ var(\hat{\mu}) = \frac{\hat{\mu}}{n}$$
 
-\subsection{Confidence Intervals}
+### Confidence Intervals
 
 
 We can use the Wald test statistic with the Poisson MLE for variance.  Wald test statistic:
@@ -60,7 +60,7 @@ The LR interval doesn't have a closed-form solution, and therefore isn't general
 $$ \frac{\chi_{2n\hat{\mu}, \alpha/2}^2}{2n} < \mu <  \frac{\chi_{2n\hat{\mu}+1, 1-\alpha/2}^2}{2n}$$
 Choosing among these: Wald is not very good (true confidence level is usually less than stated).  Exact CI tends to be excessively wide.  Score CI is a good compromise.  
 
-\subsection{Poisson Regression Models}
+### Poisson Regression Models
 
 To perform a regression, we use the Poisson Regression Model.  This is a generalized linear model with a log-link, which guarantees $\mu>0$.
 $$log(\mu) = \beta_0 + \beta_1 x_1 + ... + \beta_p x_p$$
@@ -71,7 +71,7 @@ $$ \frac{\mu(x+c)}{\mu(x)} = exp(c \beta_1)$$
 
 The interpretation is that the percentage change in the *mean* response resulting from a c-unit change in x is $100(e^{c\beta_1} - 1)$, and is not dependent on the value of $x$.  If other variables are in the model, we say "holding all other variables constant".  For example, if $e^{c\beta_1}=1.17$, this corresponds to a 17% increase in the response.
 
-\subsection{Inference and CIs}
+### Inference and CIs
 
 Standard approaches to inference in MLE are used for Poisson regression, too.  We can derive Wald CIs and tests for regression parameters (and functions of them) by appealing to the large-sample normal approximation for the distributions of the $\hat{\beta}$ MLEs.  Likelihood Ratio intervals are better than Wald CIs.
 
@@ -148,7 +148,7 @@ ggplot(crab, aes(Width, Sat)) +
 
 Remember, the model is trying to estimate the _average_ number of satellites for a given width.  
 
-\subsection{Categorical Explanatory Variables}
+### Categorical Explanatory Variables
 
 Sometimes we may want to bin a continuous variable in order to treat it as categorical (e.g. age groups).  When we have a categorical explanatory variable, we deal with it similarly to other regression models.  If it have $I$ levels, then we create $I-1$ indicator variables. To respect the base case, usually we omit the $\beta_1$ coefficient and write our equation as:
 
@@ -158,3 +158,21 @@ Note that $\beta_2$ is the difference in log means between level 2 and level 1. 
 With categorical explanatory variables, inference is usually about estimating the $\hat{\mu}$ means for each level $i$ of $X$, and comparing them in some way.  We can estimate means for each level as $\hat{\mu_i} = exp(\hat{\beta_0} + \hat{\beta_i})$.
 
 A common test is $H_0: \mu_1 = \mu_2 = ... \mu_i$, which is equivalent to $H_0:\beta_2 = ... \beta_i=0$. This is easy to do with a LRT using `Anova(...)`.  To calculate LR confidence intervals for various linear combinations of parameters, use `mcprofile(...)`.
+
+### Robust Standard Errors
+
+We can calculate robust standard errors to control for mild deviation from the assumption that mean and variance are equal.  We use the `sandwich` library and manually calculate the p-values and confidence intervals.
+
+```{r}
+library(sandwich)
+cov_matrix <- vcovHC(crab_model, type = "HC0")
+std_err <- sqrt(diag(cov_matrix))
+
+robust_est <- cbind(beta_hat=coef(crab_model), "Robust SE" = std_err,
+                    "Pr(>|z|)" = 2 * pnorm(abs(coef(crab_model)/std_err), lower.tail=FALSE),
+LL = coef(crab_model) - 1.96 * std_err,
+UL = coef(crab_model) + 1.96 * std_err)
+
+round(robust_est,4)
+
+```

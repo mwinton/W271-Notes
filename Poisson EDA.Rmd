@@ -1,7 +1,7 @@
 ---
 title: "Poisson EDA example (W271 Unit 5)"
 author: "Michael Winton"
-output: html_document
+output: pdf_document
 date: \today
 header-includes:
   - \usepackage{amsmath}
@@ -116,6 +116,15 @@ summary(poisson_fit)
 
 *Observations:* We can look at the summary to see which are the (omitted) base cases.  In this case, it's `nation=CAN` and `sector=AGR`.   Also, remember that the coefficients are for the *linear predictor*, ie. for the *log*(counts).  We have to exponentiate to get effect on the counts.
 
+We can also pull out residual device from the model and calculate a "goodness of fit" p-value.  The deviance and degrees of freedome come from the fit:
+
+```{r}
+resid_dev <- with(poisson_fit, cbind(resid_deviance = deviance, df = df.residual,
+                                     p = pchisq(deviance, df.residual, lower.tail = FALSE)))
+round(resid_dev, 4)
+```
+Because the goodness of fit $\chi^2$ test is statistically significant, we can conclude the model does not fit the data particularly well.
+
 Let's look at the frequency table.
 
 ```{r}
@@ -168,4 +177,11 @@ residualPlots(poisson_fit, layout=c(2,2))
 *Observations:* not much pattern observed here.  The *lack of fit test* results are also displayed (only meaniningful for continuous variables, otherwise `NA`).  According to the R help text, this is a curvature test.  For plots against a term in the model formula, say $X$, the test displayed is the t-test for for $I(X^2)$ in the fit of an updated model: ~ . + $I(X^2)$.
 
 The null hypothesis of this test is $H_0:$ the model fits the data well (ie. the coefficient for a curvature term $\beta_{I(X^2)}= 0$), vs. $H_a:$ the coefficient for a curvature term is non-zero.  _Here, the p-value of ~0 indicates a lack of fit, even thought it's not as evident from visual inspection._
+
+We can also look for influential points:
+
+```{r}
+influenceIndexPlot(poisson_fit, vars = "Cook")
+influenceIndexPlot(poisson_fit, vars = "hat")
+```
 

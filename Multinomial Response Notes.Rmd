@@ -134,7 +134,7 @@ $$ log(\hat{\pi}_{scab} / \hat{\pi}_{healthy}) = 30.55 - 0.65I(class=SRW) -21.60
 
 $$ log(\hat{\pi}_{sprout} / \hat{\pi}_{healthy}) = 19.17 - 0.22I(class=SRW) -15.12 density - 0.021 hardness + ...$$
 
-NOTE: `mcprofile(...)` and `confint(...)` cannot be used for profile likelihood ratio intervals for multinomial models. Wald intervals are possible to calculate because `multinom(...)` gives you standard errors.
+NOTE: `mcprofile(...)` and `confint(...)` cannot be used for profile likelihood ratio _intervals_ for multinomial models. Wald intervals are possible to calculate because `multinom(...)` gives you standard errors.
 
 LRTs for significance of coefficients are straightforward using `Anova(...)`.  Typically we want to explore whether a particular explanatory variable ahs an effect on _all_ response categories (not just one).  That hypothesis test is $H_0: \beta_{jr}=0 \forall j=2, ..., J.$
 ```{r}

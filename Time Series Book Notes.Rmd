@@ -1,0 +1,140 @@
+---
+title: "Intro to Time Series"
+author: "Michael Winton"
+output: pdf_document
+date: \today
+header-includes:
+  - \usepackage{amsmath}
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4)
+library(car)
+library(dplyr)
+```
+
+## Introduction
+
+Observations that have been collected over fixed sampling intervals are _historical time series_.  They are treated as realizations of sequences of random variables.  
+
+```{r}
+# load sample dataset
+data(AirPassengers)
+(ap <- AirPassengers)
+class(ap)  # Note there's a specific class called ts
+
+start(ap)
+end(ap)
+frequency(ap)
+
+# rollups by year
+aggregate(ap)
+
+```
+
+Several common plots are built in:
+```{r}
+# raw time series
+plot(ap, ylab='Passengers (1000s)')
+
+# annual total counts
+plot(aggregate(ap), lty=2, ylab='Annual Total Passengers (1000s)')
+
+# box plots by month
+boxplot(ap ~ cycle(ap), ylab='Passengers (1000s)')
+```
+
+The simplest model for a (long-term) _trend_ is often a linear approximation.
+
+Converting dataframe to time series:
+
+```{r}
+# load data from internet and transform to a ts object
+url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/Maine.dat'
+ME_month_df <- read.table(url, header=TRUE)
+head(ME_month_df)
+(ME_month_ts <- ts(ME_month_df$unemploy, start=c(1996, 1), freq=12))
+(ME_annual_ts <- aggregate(ME_month_ts, FUN=mean))  # without FUN=mean, we get a sum by default
+
+plot(ME_month_ts, ylab='Unemployed (%)')
+plot(ME_annual_ts, ylab='Unemployed (%)')
+```
+
+We can extract just a portion of the ts:
+```{r}
+# Extract all February and August numbers
+(ME_feb <- window(ME_month_ts, start=c(1996,2), freq=TRUE))
+(ME_aug <- window(ME_month_ts, start=c(1996,8), freq=TRUE))
+# Compare Feb, Aug to average monthly unemployment (from entire ts)
+(feb_ratio <- mean(ME_feb) / mean(ME_month_ts))
+(aug_ratio <- mean(ME_aug) / mean(ME_month_ts))
+```
+
+## Multiple time series:
+```{r}
+url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/cbe.dat'
+cbe_df <- read.table(url, header=TRUE)
+head(cbe_df)
+
+choc_ts <- ts(cbe_df$choc, start=1958, freq=12)
+beer_ts <- ts(cbe_df$beer, start=1958, freq=12)
+elect_ts <- ts(cbe_df$elec, start=1958, freq=12)
+
+# cool trick to use cbind to join plots together on shared t axis
+plot(cbind(choc_ts, beer_ts, elect_ts))
+
+# intersection of multiple time series
+isect_ap_elec <- ts.intersect(ap, elect_ts)
+start(isect_ap_elec)
+end(isect_ap_elec)
+head(isect_ap_elec)
+
+# plot both
+layout(1:2)
+plot(isect_ap_elec[,2], ylab="Airline Passengers")
+plot(isect_ap_elec[,1], ylab="AUS Electricity Production")
+
+# need to convert to vectors to do scatterplot
+layout(1:1)
+plot(as.vector(isect_ap_elec[,1]), as.vector(isect_ap_elec[,2]),
+     xlab="AUS Electricity Production", ylab="Airline Passengers")
+abline(lm(as.vector(isect_ap_elec[,2]) ~ isect_ap_elec[,1]), lty=2)
+```
+
+From this example, we see how easy it is to find correlation in two completely unrelated things.  Because of this, its common to remove _trends_ and _seasonal variation_ before doing multiple time series analysis.  This could mean working with residuals from a regression model that has terms to represent them.
+
+## Stochastic Trends in Financial Data
+
+Day-to-day changes can be hard to explain, and it may be unrealistic to assume any _deterministic_ component in a time series model.  _Stochastic trends_ can sometimes be fit with _random walk_ models.  They're common in financial data.  There are also statistical tests to test for stochastic trends.
+
+```{r}
+url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/pounds_nz.dat'
+exchange_df <- read.table(url, header=TRUE)
+head(exchange_df)
+exchange_ts <- ts(exchange_df$xrate, start=1991, freq=4)
+plot(exchange_ts, xlab='Quarter', ylab='Exchange Rate (NZ$ to GBP)')
+```
+
+```{r}
+url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/global.dat'
+global_df <- scan(url)
+head(global_df)
+global_ts <- ts(global_df, start=c(1856, 1), end=c(2005, 12), freq=12)
+# create ts for average annual value
+global_annual <- aggregate(global_ts, FUN=mean)
+
+# plot time series
+layout(1:2)
+plot(global_ts)
+plot(global_annual)
+
+# plot subset of our ts
+global_recent_ts <- window(global_ts, start=c(1970, 1), end=c(2005, 12))
+recent_time_axis <- time(global_recent_ts)  # for regression
+layout(1:1)
+plot(global_recent_ts, ylab='Temp Increase (C)')
+abline(reg=lm(global_recent_ts ~ recent_time_axis), lty=2)
+```
