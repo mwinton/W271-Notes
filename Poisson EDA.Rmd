@@ -120,10 +120,10 @@ We can also pull out residual device from the model and calculate a "goodness of
 
 ```{r}
 resid_dev <- with(poisson_fit, cbind(resid_deviance = deviance, df = df.residual,
-                                     p = pchisq(deviance, df.residual, lower.tail = FALSE)))
+                                     p = 1-pchisq(deviance, df.residual, lower.tail = FALSE)))
 round(resid_dev, 4)
 ```
-Because the goodness of fit $\chi^2$ test is statistically significant, we reject the null hypothesis and conclude the model does not fit the data particularly well.  
+Because the goodness of fit $\chi^2$ test is not statistically significant, we fail to reject the null hypothesis.  Thus, we can conclude that the model fits the data well.  
 
 Let's look at the frequency table.
 
