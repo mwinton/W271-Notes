@@ -21,18 +21,21 @@ library(dplyr)
 
 In classical linear regression, we focus on using independent variables to characterize a dependent variable.  In other words, we would be characterizing the conditional mean function of the dependent variable, conditional on the independent variables, relying on iid assumption.
 
-In univariate TSA, we focus on characterizing one series, with observations that are typically dependent on each other.  It's that dependency that we want to characterize.  We're analyzing $T$ observations of a single variable, so we have a $Tx1$ vector (contrast to the $nxk$ matrix for CLR).
+In univariate TSA, we focus on characterizing one series, with observations that are typically dependent on each other.  It's that dependency that we want to characterize.  It's the existence of these dependencies that enable us to forecast (although there are some dependency models - e.g. random walk - that can't be forecast). 
 
 ### Terminology
 
 In theory a time series begins in infinite past and continues into infinite future (important for deriving properties of TS models).
 
-A _Stochastic Process_ is a statistical phenomenon that evolves according to probability laws.   A _time series_ is a discrete realization of this "data generating process," a set of observations generated sequentially in time. Time indices are $t_1, t_2, ... t_N$ and observations are $z(t_1)...z(t_N)$. If they're equidistant, we simplify to $z_1, ... z_N$.
+A _Stochastic Process_ is a sequence of random variables, indexed by time, a statistical phenomenon that evolves according to probability laws.   A _time series_ is a discrete realization of this "data-generating process," a set of observations generated sequentially in time. The stochastic process's analogy in a classical regression is the the underlying (data-generating) population model that we try to discover.
+
+Time indices are $t_1, t_2, ... t_N$ and observations are $z(t_1)...z(t_N)$. If they're equidistant, we simplify to $z_1, ... z_N$.
 
 A _Discrete-Time Stochastic Process_ is a sequence of random variables (e.g. $\{... z_{-1}, z_0, z_1, ... z_N\}$).  A finite subset of this realization (e.g. $\{z_1, ... z_N\}$) is called a _sample path_, which can be considered a collection of observations.
 
-**IMPORTANT:** in CLR, a cross-section of observations is considered _many realizations or draws_.  In time series analysis, a collection of observations is considered only _one draw_ or _one realization_.
+**IMPORTANT:** in CLR, a cross-section of observations is considered _many realizations or draws_.  In time series analysis, a collection of observations is considered only _one draw_ or _one realization_.   We're analyzing $T$ observations, so we have a $Tx1$ vector (contrast to the $nxk$ matrix for CLR).
 
+Note that there is no error term associated with the stochastic process by itself; the error term is only introduced when trying to break down a time series into deterministic and stochastic components.
 
 ### General Approach to TSA
 
@@ -46,6 +49,15 @@ A _Discrete-Time Stochastic Process_ is a sequence of random variables (e.g. $\{
 8. Among valid models, choose the best one.
 9. Conduct forecasting!
 
+### Notes on doing time series EDA
+
+1. Plot a histogram (but remember that it loses all of the dependency information)
+2. Plot the time series
+3. Plot the ACF (maybe on shorter & longer-lag scales)
+4. Plot the PACF (maybe on shorter & longer-lag scales)
+
+NOTE: lag plot is not a part of the EDA.  It's used only to help an audience grasp the intuition behind the ACF plots.  Show it to executives, but to us as data scientists, it holds less info than ACF plots.
+
 ## Common Empirical TS Patterns
 
 Pattern 1: Trend with flutuation around the trend
@@ -57,6 +69,7 @@ Pattern 1: Trend with flutuation around the trend
 Pattern 2: Change in Structure
 
 - Long period of range-bounded fluctuation, followed by a consistent upward trend w/ variation
+- There are a class of "regime switching" models that allow for discontinuities in the coefficients, but they are not covered in this class
 
 Pattern 3: Variation around Stable Mean
 
@@ -169,9 +182,10 @@ $$ \rho_k = \begin{cases} 1, k=0 \\ 0, k \ne 0\end{cases}$$
 # White Noise simulation
 sim <- rnorm(500, mean=0, sd=1)
 layout(1:1)
-plot(ts(sim))
 hist(sim)
+plot(ts(sim))
 acf(ts(sim))
+pacf(ts(sim))  # note the y-axis scale
 ```
 
 As expected, the series appears random, and the ACF shows no significant correlation with any lags.
@@ -205,8 +219,9 @@ x2_ts <- ts(x2)
 # plot
 layout(1:1)
 plot(x2_ts, main="Simulation: Stochastic Model with Deterministic Linear Trend")
-acf(x2_ts, main="Autocorrelation with Lags")
 lag.plot(x2_ts, lags=9, main="Autocorrelation of Lags")
+acf(x2_ts, main="Autocorrelation with Lags")
+pacf(x2_ts, main="Partial Autocorrelation")
 ```
 
 As expected, we see the mean changes with time, the variance doesn't, and the ACF plot shows that the series has _very high persistence_ (ie. highly correlated with lags).  The scatterplot also show clear correlation.
@@ -243,8 +258,9 @@ x3_ts <- ts(x3)
 # plot
 layout(1:1)
 plot(x3_ts, main="Simulation: Moving Average Model (Order=1)")
-acf(x3_ts, main="Autocorrelation with Lags")
 lag.plot(x3_ts, lags=9, main="Autocorrelation of Lags")
+acf(x3_ts, main="Autocorrelation with Lags")
+pacf(x3_ts, main="Partial Autocorrelation")
 ```
 
 A distinguishing feature of this model is that the ACF abruptly drops off after the $order=q$ lags.  The scatterplots show some correlation for $lag=1$, but none after that.
@@ -305,11 +321,12 @@ x4_ts <- ts(x4)
 
 # plot
 plot(x4_ts, main="Simulation: Autoregressive Model (Order=1)")
-acf(x4_ts, main="Autocorrelation with Lags")
 lag.plot(x4_ts, lags=9, main="Autocorrelation of Lags")
+acf(x4_ts, main="Autocorrelation with Lags")
+pacf(x4_ts, main="Partial Autocorrelation")
 ```
 
-Note the exponential decay on the ACF plot behaves similarly to the simulated plots above.
+Note the exponential decay on the ACF plot behaves similarly to the simulated plots above.  The fact that only the 1st lag is significant on the partial autocorrelation plot is an indicator of the order of the AR model (ie. $AR(1)$).
 
 The dotted lines represent the 95% CI for the ACF.  Note that the CI of each of the autocorrelations is the same, independent of lag.  This is because of the property of the AR model that both conditional and unconditional variances are constant.  The CI (which tightens with sample size $n$) is calculated as:
   
@@ -348,7 +365,7 @@ wave_df <- read.table(url, header=TRUE)
 wave_ts <- ts(wave_df)
 
 # data is collected at 0.1 sec intervals (396 obs = 39.6 sec)
-layout(1:2)
+#layout(1:2)
 plot(wave_ts)
 abline(h=0, lty=2)
 
@@ -364,11 +381,12 @@ It's important to plot the "correlogram" of $acf$ and $avcf$ vs. lag using the R
 ```{r}
 # look at ACF
 acf(wave_ts)
+pacf(wave_ts)
 # values are stored in acf(...)$acf
 head(acf(wave_ts)$acf, 10)
 ```
 
-Observe the wavelike shape that resembles a shrinking $cos$ function.  This is typical of TS generated by an $AR(2)$ process.
+Observe the wavelike shape on the ACF that resembles a shrinking $cos$ function.  This is typical of TS generated by an $AR(2)$ process.
 
 Another visual way to examine dependency structure of a series is a plot of scatterplot matrix looking at autocorrelation with different lag values $k=1, k=2, ...$.
 
@@ -402,6 +420,8 @@ acf(unemployment_ts, type='correlation', main="Autocorrelation - First Time Jobl
 axis_max <- length(unemployment_ts)
 axis(1, at=0:axis_max/12, labels=0:axis_max) 
 abline(h=0.8, lty=3, col="red")
+
+pacf(unemployment_ts)
 ```
 
 The scatterplot matrix shows strong correlation for all 9 months displayed.  The ACF plot shows a correlation of over 0.80 for 5 months (the dotted red line shows this arbitrary threshhold).
