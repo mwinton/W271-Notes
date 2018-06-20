@@ -93,16 +93,18 @@ $$ R_t = \beta_1 + \beta_2 S_{t-6} + w_t$$
 The `ts.intesect(...)` helps us do time series alignment.  
 ```{r}
 # SOI and Recruitment data is in astsa library
-soi_ts <- astsa::soi
+library(astsa)
+soi_ts <- soi
 str(soi_ts)
-rec_ts <- astsa::rec
+rec_ts <- rec
 str(rec_ts)
 
 # make sure to do time index alignment; new ts object includes both ts's
 fish <- ts.intersect(rec_ts, soi_l6=stats::lag(soi_ts, -6))
+str(fish)
 
 # build regression model
-fit2 <- lm(rec ~ soi_l6, data=fish, na.action=NULL)
+fit2 <- lm(rec_ts ~ soi_l6, data=fish, na.action=NULL)
 summary(fit2)
 ```
 
