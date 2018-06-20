@@ -1,0 +1,198 @@
+---
+title: "Time Series Regression"
+author: "Michael Winton"
+date: "\today"
+output:
+  html_document:
+    df_print: paged
+header-includes: \usepackage{amsmath}
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4, fig.height=3.5)
+library(car)
+library(dplyr)
+```
+
+## Linear Trend Time Regression
+
+A classical linear regression would take the following form for the conditional mean:
+
+$$ y_t = \beta_0 + \beta_1 x_{t1} + \beta_2 x_{t2} + ... + \beta_k x_{tk} + \epsilon_t$$
+The $\beta$ terms are the unknown regression parameters, and the $\epsilon_t$ term represents a stochastic process with random variables with $mean=0$ and $variance=\sigma_{\epsilon}^2$.  If we assume the random variables follow a normal distribution, then this is the Classical Normal Linear Regression Model.
+
+Use global temperature dataset as an example:
+```{r}
+# load dataset
+url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/global.dat'
+gtemp_df <- scan(url)
+gtemp_ts <- ts(gtemp_df, start=c(1856, 1), end=c(2005, 12), freq=12)
+str(gtemp_ts)
+
+gtemp_annual <- aggregate(gtemp_ts, FUN=mean)
+str(gtemp_annual)
+gtemp_annual <- window(gtemp_annual, c(1880))  # to more closely match async
+str(gtemp_annual)
+
+# plot time series
+plot(gtemp_annual, xlab="Year", ylab="Temp Deviation", main="Global Temperature Rise")
+```
+
+Observe that the temperature started to trend upwards around 1920.  We can consider the following linear time trend regression model:  
+$$ y_t = \beta_0 + \beta_1 x_{t1} +\epsilon_t$$
+
+We can replace $t=1856, 1857, ...$ with $t=1, 2, ...$ without changing $\beta_1$; only the intercept changes. This model assumes that $\epsilon_t$ is an iid normal sequence, but we will _need to verify this later_.  To estimate this regression:
+
+```{r}
+gtemp_lt <- lm(gtemp_annual ~ time(gtemp_annual))
+summary(gtemp_lt)
+plot(gtemp_annual, xlab="Year", ylab="Temp Deviation", main="Global Temperature Rise")
+abline(gtemp_lt, lty=2)
+```
+
+Visually, we see that this model doesn't do a very good job of capturing the pattern in our data, despite the relatively high Adjusted $R^2$.  Performing regression diagnostics:
+
+```{r}
+par(mfrow=c(2,2))
+plot(gtemp_lt)
+par(mfrow=c(1,1))
+
+# test for heteroskedasticity (H_0: homoskedasticity)
+library(lmtest)
+bptest(gtemp_lt)
+```
+We see in particular from the Residuals vs Fitted plot that we very clearly violate the zero conditional mean assumption.  The plots show that may be some minor violation of the homoskedasticity assumption, but the Breusch Pagan test fails to reject the null hypothesis of homoskedasticity.  Also, residuals are normally distributed.
+
+### Goodness of Fit (AIC, AICc, BIC)
+
+These are commonly used _in-sample_ measures of goodness of fit.  (We desire lower values of the IC.)  These criteria all penalize the use of extra parameters in the model.  BIC is the most stringent of these.
+
+Akaike's Information Criterion:
+$$ AIC = log (\hat{\sigma}_k^2) + \frac{n+2k}{n}$$
+
+where $\hat{\sigma}_k^2 = SSE_k/n$ and $SSE_k/n = \sum_{t=1}^n(x_t - \hat{\beta}' z_t)^2$.  $k$ is the number of parameters in the model, and $n$ is the sample size.
+
+Bias-Corrected AIC:
+$$ AIC_c = log (\hat{\sigma}_k^2) + \frac{n+k}{n-k-2}$$
+
+Bayesian's Information Criterion:
+$$ BIC = log (\hat{\sigma}_k^2) + \frac{k \cdot log(n)}{n}$$
+### Regressing one time series on another
+
+Sometimes we want to use one time series to forecast the value of another.  However, we can't use future to forecast future, so we need to use a lag in our model.
+
+When you are working with two time series, you need to do EDA on both, and also plot correlation between them.
+
+The (ASTSA) textbook tells us that lag values of Southern Oscillation Index are correlated with the current value of Recruitment.  We could entertain a simple model based on a 6 month lag.  This would allow us to use today's SOI value to forecast the value of Recruitment 6 months in the future.
+
+$$ R_t = \beta_1 + \beta_2 S_{t-6} + w_t$$
+
+The `ts.intesect(...)` helps us do time series alignment.  
+```{r}
+# SOI and Recruitment data is in astsa library
+soi_ts <- astsa::soi
+str(soi_ts)
+rec_ts <- astsa::rec
+str(rec_ts)
+
+# make sure to do time index alignment; new ts object includes both ts's
+fish <- ts.intersect(rec_ts, soi_l6=stats::lag(soi_ts, -6))
+
+# build regression model
+fit2 <- lm(rec ~ soi_l6, data=fish, na.action=NULL)
+summary(fit2)
+```
+
+## Smoothing Techniques
+
+Smoothing techniques are often used to under trend and cyclical components of a time series.  THe general concept is to take a weighted average of values in a moving window.
+
+### Moving (Rolling) Averages
+
+A _symmetric_ moving average smoother takes the form:
+
+$$ m_t = \sum_{j=-k}^k a_j x_{t-j}$$
+
+where $a_j \ge 0$ and sum of the weights $\sum_{j=-k}^k a_j =1$.
+
+For example, setting $k=2$ with weekly data essentially results in a monthly series, and can help bring out a seasonality pattern:
+
+$$ m_t = \frac{1}{5} \sum_{j=-2}^2  x_{t-j} = \frac{1}{5}[x_{t-2} + x_{t-1} + x_{t} + x_{t+1} + x_{t+2}]$$
+Similarly, setting $k=26$ would essentially give a yearly series (with $a=\frac{1}{53}$).  Note that some people only use backward smoothing techniques so we don't have to rely on "future" data for each point.
+
+### Polynomial and Periodic Regression Smoothers
+
+This class of smoothing technique requires that we define a smoothing function $f_t$ and a $z_t$ stationary process.
+
+$$ x_t = f_t + z_t$$
+We can use a polynomial function for $f_t$ (where we specify the degree of polynomial $p$):
+$$ f_t = \sum_{i=0}^p \beta_i t^i$$
+For periodic data, we use a periodic function such as:
+
+$$ f_t = \sum_{i=0}^p \alpha_i cos(2\pi w_i t) \beta_i sin(2\pi w_i t)$$
+where $cos(2\pi w_0 t) = sin(2\pi w_0 t) = 1$ and $w_1, w_2, ...w_p$ are distinct, specified frequencies.
+
+The polynomial and periodic polynomial functions can be combined as one smoother in a classical linear regression.
+
+### Spline Smoothers
+
+This is an extension of the polynomial smoothing technique by dividing the modeling time horizon into $k$ mutually exclusive and exhaustive intervals, and then fitting a polynomial regression to each of the intervals.
+
+$$[t_0=1,t_1], [t_1+1, t_2],...,[t_{k-1}+1, t_k=n]$$
+where $t_0, t_1, ... t_k$ are called the "knots."  Each interval is fit with a regression of the form:
+
+$$ f_t = \beta_0 + \beta_1 t + ... \beta_p t^p$$
+A common choice is $p=3$ for a cubic spline.
+
+The _smoothing splines_ technique modifies the spline technique by incorporating the penalized smoothness component in the objective function such that the minimization problem accounts for the tradeoff between model fit and degree of smoothness.    The objective function is written (with smoothing parameter $\lambda$, and $f_t$ is a cubic spline) as: 
+$$ \sum_{t=1}^n (x_t - f_t)^2 + \lambda \int(f_t'')^2dt$$
+
+### Kernel Smoothers
+
+A kernel smoother is a symmetric moving average smoother with a probability density weight function.
+
+$$ \hat{f}_t = \sum_{i=1}^n w_i(t)x_i \text{  where  } w_i(t)=\frac{K(\frac{t-i}{b})}{\sum_{j=1}^n K(\frac{t-i}{b})}$$
+
+## Example
+
+First we load and do a quick EDA on the US first time unemployment claim data.
+```{r}
+unemployment_df <- read.csv('jobless-claims-historical-chart.csv', skip=13, header=TRUE)
+unemployment_df <- unemployment_df %>% filter(value>0) %>% mutate(thousands=value/1000)
+unemployment_ts <- ts(unemployment_df$thousands, start=c(1967,1), freq=12)
+
+# EDA
+head(unemployment_ts)
+str(unemployment_ts)
+par(mfrow=c(2,2))
+plot(unemployment_ts, xlab="Monthly Series", ylab="First Time Claims (in Thousands)",
+     main="US Initial Unemployment Claims")
+hist(unemployment_ts, xlab="First Time Claims (in Thousands)",
+     main="US Initial Unemployment Claims")
+acf(unemployment_ts, main="ACF of US Initial Unemployment Claims")
+pacf(unemployment_ts, main="Partial ACF of US Initial Unemployment Claims")
+```
+
+Now we will show some smoothing techniques.  First, we use `filter(...)` to calculate moving averages.
+
+```{r}
+# calculate moving averages
+# explicitly calling stats::filter so we don't get dplyr::filter
+ma3 <- stats::filter(unemployment_df$thousands, rep(1,3)/3, sides=2)  # 3 months
+ma40 <- stats::filter(unemployment_df$thousands, sides=2, rep(1,40)/40)  # 40 months
+
+# convert the moving averages to ts objects
+ma3_ts <- ts(ma3, start=c(1967,1), freq=12)
+ma40_ts <- ts(ma40, start=c(1967,1), freq=12)
+
+# use ts.plot to overlay multiple time series
+par(mfrow=c(1,1))
+ts.plot(unemployment_ts, ma3_ts, ma40_ts, gpars = list(col = c("black", "red", "blue")),
+        xlab="Monthly Series", ylab="First Time Claims (in Thousands)",
+        main="US Initial Unemployment Claims")
+```
+
+
