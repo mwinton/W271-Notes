@@ -1,7 +1,7 @@
 ---
-title: "Time Series Regression"
+title: "Time Series Regression and Smoothing"
 author: "Michael Winton"
-date: "\today"
+date: \today
 output:
   html_document:
     df_print: paged
@@ -159,6 +159,29 @@ A kernel smoother is a symmetric moving average smoother with a probability dens
 
 $$ \hat{f}_t = \sum_{i=1}^n w_i(t)x_i \text{  where  } w_i(t)=\frac{K(\frac{t-i}{b})}{\sum_{j=1}^n K(\frac{t-i}{b})}$$
 
+### Exponential Smoothers
+
+We assume no systematic trend or seasonality, and that the mean of a process can change from step to step (but we don't know which direction).  Example: forecasting sales of a well-established product in a stable market.  The model is:
+
+$$ x_t = \mu_t + w_t$$
+Where $x_t$ is our observation at time $t$, $\mu_t$ is the nonstationary mean, and $w_t$ is the white noise with $mean=0$ and $variance=\sigma_w^2$.  A reasonable estimate of the mean at time $t$ would be a weighted average of our observation at time $t$ and our estimate of the mean at $t-1$:
+
+$$ \hat{\mu}_t = \alpha x_t + (1-\alpha)\hat{\mu}_{t-1} \text{ where } 0 < \alpha < 1$$
+
+We refer to $\hat{\mu}$ as the _exponentially weighted moving average (EWMA)_ at $t$ and $\alpha$ as the smoothing parameter. $\alpha$ near 0 is heavily smoothed; near 1 is minimally smoothed.  We would only use $\alpha$ near one if we expect changes in the mean to be large compared to $\sigma$.  A typical value is $\alpha=0.2$ because we usually expect the change between $t-1$ and $t$ to be less than one standard deviation.  
+
+NOTE: R will calculate $\alpha$ if you don't provide it, by minimizing sum of squared one-step-ahead forecast errors.  This is not good for long series with means that change little, because it makes $\alpha$ too small.
+
+We can also rewrite the equation in terms of one-step-ahead forecast error ($x_t - \hat{\mu}_{t-1}$):
+
+$$ \hat{\mu}_t = \alpha (x_t - \hat{\mu}_{t-1}) + \hat{\mu}_{t-1} \text{, with starting value }\hat{\mu}_1=x_1$$
+Also, by repeated backpropagation:
+
+$$ \hat{\mu}_t = \alpha x_t + \alpha(1-\alpha)x_{t-1} + \alpha(1-\alpha)^2x_{t-2} + ...$$
+This is a combination of the current observation and all past observations, with more weight given to the most recent ones.  Note the weights form a geometric series, and the sum of the infinite series is 1.
+
+
+
 ## Worked Example with Various Smoothers
 
 ### EDA
@@ -253,6 +276,21 @@ lines(ksmooth(time(unemployment_ts), unemployment_ts, "normal", bandwidth=1), co
 lines(ksmooth(time(unemployment_ts), unemployment_ts, "normal", bandwidth=2), col="purple")
 lines(ksmooth(time(unemployment_ts), unemployment_ts, "normal", bandwidth=5), col="red")
 ```
+
+### Exponential Smoother
+
+We use a time series without any clear trend or seasonality for this example:
+```{r}
+url <- 'https://raw.githubusercontent.com/mwinton/Introductory_Time_Series_with_R_datasets/master/motororg.dat'
+complaints_df <- read.table(url, header=TRUE)
+complaints_ts <- ts(complaints_df$complaints, start=c(1996, 1), frequency=12)
+par(mfrow=c(1,1))
+# need to set beta, gamma=FALSE for exponential smoothing
+(exp_smooth <- HoltWinters(complaints_ts, alpha=0.2, beta=FALSE, gamma=FALSE))
+# plot command plots the data and smoother
+plot(exp_smooth, main="Exponential Smoothing (alpha=0.2)")
+```
+
 
 ## Eliminating the Trend
 
