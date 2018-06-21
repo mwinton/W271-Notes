@@ -5,6 +5,7 @@ date: "\today"
 output:
   html_document:
     df_print: paged
+  pdf_document: default
 header-includes: \usepackage{amsmath}
 geometry: margin=1in
 fontsize: 11pt
@@ -158,8 +159,9 @@ A kernel smoother is a symmetric moving average smoother with a probability dens
 
 $$ \hat{f}_t = \sum_{i=1}^n w_i(t)x_i \text{  where  } w_i(t)=\frac{K(\frac{t-i}{b})}{\sum_{j=1}^n K(\frac{t-i}{b})}$$
 
-## Example
+## Worked Example with Various Smoothers
 
+### EDA
 First we load and do a quick EDA on the US first time unemployment claim data.
 ```{r}
 unemployment_df <- read.csv('jobless-claims-historical-chart.csv', skip=13, header=TRUE)
@@ -178,7 +180,11 @@ acf(unemployment_ts, main="ACF of US Initial Unemployment Claims")
 pacf(unemployment_ts, main="Partial ACF of US Initial Unemployment Claims")
 ```
 
-Now we will show some smoothing techniques.  First, we use `filter(...)` to calculate moving averages.
+Now we will show some smoothing techniques.  
+
+### Moving Averages
+
+First, we use `filter(...)` to calculate moving averages.
 
 ```{r}
 # calculate moving averages
@@ -194,7 +200,101 @@ ma40_ts <- ts(ma40, start=c(1967,1), freq=12)
 par(mfrow=c(1,1))
 ts.plot(unemployment_ts, ma3_ts, ma40_ts, gpars = list(col = c("black", "red", "blue")),
         xlab="Monthly Series", ylab="First Time Claims (in Thousands)",
-        main="US Initial Unemployment Claims")
+        main="US Initial Unemployment Claims (Moving Average Smoother)")
 ```
 
+The smoother that only uses 3 observations almost mirrors the original data. The one with 40 observations doesn't follow as drastically; it pulls the curve back down away from the peaks.
+
+### Polynomial Regression Smoother
+
+Now we'll try a regression smoother with a 3rd degree polynomial.
+
+```{r}
+# fit a polynomial regression
+mo <- time(unemployment_ts) - mean(time(unemployment_ts))
+mo_squared <- mo^2
+mo_cubed <- mo^3
+reg_smoother <- lm(unemployment_ts ~ mo + mo_squared + mo_cubed, na.action=NULL)
+
+# plot the individual components and the regression
+# par(mfrow=c(2,2))
+# plot(mo)
+# plot(mo_squared)
+# plot(mo_cubed)
+# par(mfrow=c(1,1))
+plot(unemployment_ts, type="l", main="Polynomial Regression Smoother")
+lines(fitted(reg_smoother), col="red")
+```
+
+This smoother is not a particularly good choice for this dataset.  It does not capture the trend dynamics well for the last 10-15 years.
+
+### Spline Smoother
+
+We let R calculate the splines.  We have to play around with the `spar` parameter.
+
+```{r}
+plot(unemployment_ts, type="l", main="Spline Smoother")
+lines(smooth.spline(time(unemployment_ts), unemployment_ts, spar=0), col="green")
+lines(smooth.spline(time(unemployment_ts), unemployment_ts, spar=0.5), col="blue")
+lines(smooth.spline(time(unemployment_ts), unemployment_ts, spar=1), col="purple")
+lines(smooth.spline(time(unemployment_ts), unemployment_ts, spar=2), col="red")
+```
+
+The purplse and red smoothers don't capture enough of the pattern of the data.
+
+### Kernel Smoother
+
+Kernel smoothing can usually capture the underlying trend very smoothly.  We have to play around with the kernel function (e.g. "normal") and with the bandwidth (how wide is the window being used for the calculation).
+
+```{r}
+plot(unemployment_ts, type="l", main="Kernel Smoother")
+lines(ksmooth(time(unemployment_ts), unemployment_ts, "normal", bandwidth=0.5), col="green")
+lines(ksmooth(time(unemployment_ts), unemployment_ts, "normal", bandwidth=1), col="blue")
+lines(ksmooth(time(unemployment_ts), unemployment_ts, "normal", bandwidth=2), col="purple")
+lines(ksmooth(time(unemployment_ts), unemployment_ts, "normal", bandwidth=5), col="red")
+```
+
+## Eliminating the Trend
+
+1. Estimate a (linear) trend for the series
+2. Detrend the series - subtract the trend from the observed series
+3. Model residuals using a stationary model
+
+Again, we'll work with the global temperature data.
+
+```{r}
+# use the dataset from astsa
+library(astsa)
+str(gtemp)
+time(gtemp)  # good summary to make sure we know the frequency of the data
+# plot time series
+plot(gtemp, type="o", xlab="Year", ylab="Temp Deviation", main="Global Temperature Rise")
+```
+
+First, estimate the linear trend:
+
+```{r}
+# 1. estimate linear trend
+gtemp_lt <- lm(gtemp ~ time(gtemp), na.action=NULL)
+summary(gtemp_lt)
+plot(gtemp, type="o", xlab="Year", ylab="Temp Deviation", main="Global Temperature Rise")
+abline(gtemp_lt)
+```
+
+Then we detrend the series; plotting the residuals shows the results:
+
+```{r}
+# 2. detrend the series
+plot(resid(gtemp_lt), type="o", main="Detrend Global Temp Series")
+```
+
+This did a pretty good for the majority of the series.  (Not quite as good at the right; polynomial fits might do a better job detrending this dataset.)  If we desire to model the stationary series, we model these residuals with a stationary model.  We also will need to establish whether the stationarity assumption is valid.  
+
+### First Differencing
+
+Note that there's also another approach we could take: _First Differencing_.  We want to "undifference" the series when we want to do forecasting.
+
+```{r}
+plot(diff(gtemp), type="o", main="First Difference of the Global Temperature Series")
+```
 

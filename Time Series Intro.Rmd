@@ -156,9 +156,9 @@ $$ \text{sample acf: } \hat{\rho_k} = \frac{\hat{\gamma_k}}{\hat{\gamma_0}} = \f
   
 ### Partial Autocorrelation
   
-This is a conditional correlation, conditional on other explanatory variables being accounted for in a TS model.  The partial autocorrelation of a process $z_t$ at lag $k$ ($\phi_{kk}$) is the autocorrelation between $z_t$ and $z_{t-k}$, adjusting for effects of variables $z_{t-1}, z_{t-2}, ... z_{t-k+1}$.  In other words, if you did a linear regression of $z_t$ on all of the other $z$ variables, $\phi_{kk}$ would be the coefficient for $z_{t-k}$.  (Note: this kind of regression would be called an _autoregression_.)
+This is a conditional correlation, conditional on other explanatory variables being accounted for in a TS model.  The partial autocorrelation of a process $z_t$ at lag $k$ ($\alpha_{kk}$) is the autocorrelation between $z_t$ and $z_{t-k}$, adjusting for effects of variables $z_{t-1}, z_{t-2}, ... z_{t-k+1}$.  In other words, if you did a linear regression of $z_t$ on all of the other $z$ variables, $\alpha_{kk}$ would be the coefficient for $z_{t-k}$.  (Note: this kind of regression would be called an _autoregression_.)
 
-**The partial autocorrelation summarizes the dynamics of a process, and as such it's a powerful tool for identifying the _order $p$_ of an $AR(p)$ model.**
+**The partial autocorrelation summarizes the dynamics of a process, and as such it's a powerful tool for identifying the _order $p$_ of an $AR(p)$ model.**  The `pacf` plot cuts off abruptly after the lag corresponding to the order of the AR function, independent of the value of the autoregressive parameter.
 
 
 ### Strict vs. Weak Stationarity
@@ -265,7 +265,18 @@ pacf(x3_ts, main="Partial Autocorrelation")
 
 A distinguishing feature of this model is that the ACF abruptly drops off after the $order=q$ lags.  The scatterplots show some correlation for $lag=1$, but none after that.
 
-### Autoregressive Model (Order = 1)
+## Autoregressive Models
+
+These are the most important time series models.  They are founded on the idea that the current value of a series can be explained as a function of the $p$ past values.  A stationary autoreggressive model of order p, $AR(p)$ takes the form:
+
+$$ x_t = \alpha_0 + \alpha_1 x_{t-1} + \alpha_2 x_{t-2} + ... + \alpha_p x_{t-p} + w_t$$
+
+where $x_t$ is a stationary series, the $\alpha$ values are _non-zero_ unknown parameters to be estimated.  $w_t$ is the Gaussian white noise series with $mean=0$ and $variance=\sigma_w^2$.  $\alpha = \frac{\mu}{1- \alpha_1 - \alpha_2 ... - \alpha_p}$.
+
+There's also a technical requirement for _invertability_, but AR models always meet this.
+
+
+### Autoregressive Model, Order = 1
 
 The AR(1) model takes the form: 
 
@@ -279,7 +290,7 @@ The result can be written more cleanly as:
 
 $$ x_t = \sum_{i=0}^\infty \alpha^i w_{t-i}$$
 
-Using that form, it's easy to calculate the expected value of $x_t$: 
+provided that $|\alpha|<1$ and $x_t$ is stationary.  Using that form, it's easy to calculate the expected value of $x_t$, showing that the $AR(1)$ model is stationary with mean: 
   
   $$ E(x_t) = E(\sum_{i=0}^\infty \alpha^i w_{t-i}) = \sum_{i=0}^\infty E(\alpha^i w_{t-i}) = \sum_{i=0}^\infty \alpha^i E(w_{t-i}) = 0$$
     
@@ -306,33 +317,80 @@ abline(h=0, lty=2)
 Now run a simulation:
   
 ```{r}
-# run a simulation
-alpha <- 0.8
-sigma_w <- 1
-w_t <- rnorm(500, 0, sigma_w)
-
-x4 <- vector()
-x4[1] <- w_t[1]
-for (t in 2:500) {
-  x4[t] <- alpha * x4[t-1] + w_t[t]
+# Create a function to simulate AR(1) models
+sim_ar1 <- function(alpha, sigma_w=1) {
+  x <- w_t <- rnorm(500, 0, sigma_w)
+  for (t in 2:500) {
+    x[t] <- alpha * x[t-1] + w_t[t]
+  }
+  ts(x)
 }
-x4_ts <- ts(x4)
 
-
-# plot
-plot(x4_ts, main="Simulation: Autoregressive Model (Order=1)")
+# run a simulation and plot
+x4_ts <- sim_ar1(alpha=0.9, sigma_w=1)
+plot(x4_ts, main="Simulation: AR(1) Model with alpha=0.9")
 lag.plot(x4_ts, lags=9, main="Autocorrelation of Lags")
 acf(x4_ts, main="Autocorrelation with Lags")
 pacf(x4_ts, main="Partial Autocorrelation")
 ```
 
-Note the exponential decay on the ACF plot behaves similarly to the simulated plots above.  The fact that only the 1st lag is significant on the partial autocorrelation plot is an indicator of the order of the AR model (ie. $AR(1)$).
+High values of $\alpha$ result in a persistent model.  Note how the time series appears to have windows where it "tends" to go up or down.  Note the exponential decay on the ACF plot behaves similarly to the simulated plots above.  The fact that only the 1st lag is significant on the partial autocorrelation plot is an indicator of the order of the AR model (ie. $AR(1)$).
 
 The dotted lines represent the 95% CI for the ACF.  Note that the CI of each of the autocorrelations is the same, independent of lag.  This is because of the property of the AR model that both conditional and unconditional variances are constant.  The CI (which tightens with sample size $n$) is calculated as:
   
 $$ CI: -\frac{1}{n} \pm \frac{2}{\sqrt{n}}$$
 
 While, in theory, points outside the 95% CI would be evidence against the null hypothesis that the correlation at lag $k$ is zero, we need to be careful about interpretations of _multiple hypothesis tests_.  Even if all autocorrelations are 0, then by chance 5% of the estimates could still fall outside the CI.
+
+Now let's look at a smaller value of $\alpha=0.4$:
+```{r}
+# run a simulation and plot
+x4_ts <- sim_ar1(alpha=0.4, sigma_w=1)
+plot(x4_ts, main="Simulation: AR(1) Model with alpha=0.4")
+lag.plot(x4_ts, lags=9, main="Autocorrelation of Lags")
+acf(x4_ts, main="Autocorrelation with Lags")
+pacf(x4_ts, main="Partial Autocorrelation")
+```
+
+We observe that the persistence is much less apparent; the time series looks more "random."  The ACF also declines much more rapidly.
+
+One last simulation (including positive and negative values for $\alpha$):
+
+```{r}
+par(mfrow=c(2,2))
+a9_ts <- sim_ar1(alpha=0.9, sigma_w=1)
+aneg9_ts <- sim_ar1(alpha=-0.9, sigma_w=1)
+a4_ts <- sim_ar1(alpha=0.4, sigma_w=1)
+aneg4_ts <- sim_ar1(alpha=-0.4, sigma_w=1)
+plot(a9_ts, main="Simulation: AR(1) Model with alpha= 0.9")
+plot(a4_ts, main="Simulation: AR(1) Model with alpha= 0.4")
+plot(aneg9_ts, main="Simulation: AR(1) Model with alpha= -0.9")
+plot(aneg4_ts, main="Simulation: AR(1) Model with alpha =-0.4")
+```
+
+Observe that for models with positive autocorrelation factor, the higher value ($0.9$) shows much more persistence than the lower value ($0.4$).  However, for negative autocorrelation factors, the two models are both quite volatile, but note that the scale of values for $\alpha=-0.9$ is much larger than for $-0.4$.
+
+Now let's look at the ACF plots for these 4 models:
+
+```{r}
+acf(a9_ts, main="Simulation: AR(1) Model with alpha= 0.9")
+acf(a4_ts, main="Simulation: AR(1) Model with alpha= 0.4")
+acf(aneg9_ts, main="Simulation: AR(1) Model with alpha= -0.9")
+acf(aneg4_ts, main="Simulation: AR(1) Model with alpha= -0.4")
+```
+
+As expected, we see the ACF for models with $\alpha < 0$ alternate positive and negative.  Also, the model with $\alpha=0.9$ shows much more persistence than the model with $0.4$.
+
+If we were to plot the PACF, all 4 plots would drop to zero after the first lag.
+
+### Backward Shift Operator
+
+The backward shift operator $B$ shifts from $x_t$ to $x_{t-1}$.  Using this, we can rewrite the $AR(1)$ equation:
+
+$$x_t = \alpha x_{t-1} + w_t = \alpha B(x_t) + w_t$$ 
+
+$$ (1-\alpha B)x_t = w_t \implies x_t= \frac{w_t}{1-\alpha B} = \sum_{i=0}^\infty \alpha^i w_{t-i}$$
+giving the same results as above.
 
 ### Random Walk Model
 
