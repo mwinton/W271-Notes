@@ -291,7 +291,6 @@ par(mfrow=c(1,1))
 plot(exp_smooth, main="Exponential Smoothing (alpha=0.2)")
 ```
 
-
 ## Eliminating the Trend
 
 1. Estimate a (linear) trend for the series
