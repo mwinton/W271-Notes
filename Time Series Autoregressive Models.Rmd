@@ -21,18 +21,17 @@ library(dplyr)
 ## Backshift Operator
 
 The AR model is written as:
-$$ x_t = [\delta +]\ \alpha_1 x_{t-1} + \alpha_2 x_{t-2} + ... + \alpha_p x_{t-p} + w_t$$
-Note: $\delta$ is a "drift" parameter, which we haven't covered yet.  (Not totally sure it belongs in the AR model.)
+$$ x_t =  \alpha_1 x_{t-1} + \alpha_2 x_{t-2} + ... + \alpha_p x_{t-p} + w_t$$
 
 With the backward shift operator, we can rewrite this as:
-$$ x_t = [\delta +]\ \alpha_1 B + \alpha_2 B^2 + ... \alpha_p B^p + w_t$$
+$$ x_t = \alpha_1 B + \alpha_2 B^2 + ... \alpha_p B^p + w_t$$
 Rearrange to get $w_t$ by itself:
-$$ (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) x_t = [\delta +]\  w_t$$
+$$ (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) x_t = w_t$$
 
 We define $\theta_p(B)$ as this coefficient of $x_t$:
 $$ \theta_p(B) =  (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) $$
 which gives:
-$$ \theta_p(B) x_t = [\delta +]\ w_t$$
+$$ \theta_p(B) x_t =w_t$$
 
 The _characteristic equation_ is defined by $\alpha(B) = 0$:
 
@@ -40,8 +39,6 @@ $$ \theta_p(B) =  (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) = 0 $$
 
 This is an important tool to check if a process is stationary.  **If _all_ roots for $B$ have an absolute value > 1, then process $x_t$ is stationary.**  This basically means they all sit outside a unit circle.
 
-The mean of this model is given by:
-$$ E(x_t) = \frac{\delta}{1-\alpha_1 - \alpha_2 - ... - \alpha_p}$$
 
 ### Alternate terminologies
 
