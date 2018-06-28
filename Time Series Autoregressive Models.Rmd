@@ -1,0 +1,215 @@
+---
+title: "Time Series Autoregressive Models"
+author: "Michael Winton"
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+header-includes: \usepackage{amsmath}
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4, fig.height=3.5)
+library(car)
+library(dplyr)
+```
+
+## Backshift Operator
+
+The AR model is written as:
+$$ x_t = \alpha_0 + \alpha_1 x_{t-1} + \alpha_2 x_{t-2} + ... + \alpha_p x_{t-p} + w_t$$
+
+With the backward shift operator, we can rewrite this as:
+$$ x_t = \alpha_0 + \alpha_1 B + \alpha_2 B^2 + ... \alpha_p B^p + w_t$$
+Rearrange to get $w_t$ by itself:
+$$ (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) x_t = \alpha_0 + w_t$$
+
+We define $\alpha(B)$ as this coefficient of $x_t$:
+$$ \alpha(B) =  (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) $$
+which gives:
+$$ \alpha(B) x_t = \alpha_0 + w_t$$
+
+The _characteristic equation_ is defined by $\alpha(B) = 0$:
+
+$$ \alpha(B) =  (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) = 0 $$
+
+This is an important tool to check if a process is stationary.  **If _all_ roots for $B$ have an absolute value > 1, then process $x_t$ is stationary.**  This basically means they all sit outside a unit circle.
+
+The mean of this model is given by:
+$$ E(x_t) = \frac{\alpha_0}{1-\alpha_1 - \alpha_2 - ... - \alpha_p}$$
+
+### Alternate terminologies
+
+In the lectures, we sometimes see these alternate terminologies:
+
+- $\phi(B)$ or $\Phi(B)$ instead of $\alpha(B)$
+- $L$ (for lag) instead of $B$ (for backshift)
+- $\epsilon_t$ (error) instead of $w_t$ (white noise)
+
+## Key Properties of a General AR(p) model
+
+1. Stationarity condition - an AR(p) process is covariance stationary if and only if all roots of the autoregressive lag operator polynomial $\alpha(B)$ are outside the unit circle (also meaning that the _inverse_ of these roots is inside the unit circle).
+
+2. ACF - the autocorrelation function of the AR(p) process decays gradually, with displacement.
+
+3. PACF - the partial autocorrelation function of the AR(p) process has a sharp cutoff at displacement p.
+
+Models with higher autoregressive order can have richer dynamics, with the ACF displaying a wider variety of patterns (e.g. it can have damped oscilliation that an AR(1) model could only have with a negative coefficient).  These richer patterns can mimic a wider range of _cyclical_ patterns.
+
+## Example AR(2) simulation
+
+We'll run a simulation with the model:
+
+$$ x_t = 1.5 x_{t-1} - 0.9 x_{t-2} + w_t $$
+
+Rewritten in terms of the backshift operator:
+$$\alpha(B) = (1 - 1.5B + 0.9B^2)x_t = w_t$$
+Since we can't easily factor this manually, use `polyroot`:
+
+```{r}
+(roots <- polyroot(c(1, -1.5, 0.9)))
+abs(roots)
+
+(inverse_roots <- 1/roots)
+abs(inverse_roots)
+```
+Important observations:
+
+- Because absolute value of the roots > 1, this process is **covariance stationary**.
+- Because the roots are complex, the ACF oscillates
+- Because the roots are close to 1, the ACF dampens slowly
+
+### Simulate the data and see what it looks like
+
+Now, run the actual simulation with `arima.sim`:
+```{r}
+x2 <- w <- rnorm(1000)  # not clear we need this line
+x2 <- arima.sim(n=1000,list(ar=c(1.5, -0.9), ma=0))
+str(x2)
+summary(x2)
+
+plot(x2, main='Simulated AR(2) process; ar=1.5, ar2=-0.9')
+hist(x2, breaks=20, main='Simulated AR(2) process; ar=1.5, ar2=-0.9')
+acf(x2, main='Simulated AR(2) process; ar=1.5, ar2=-0.9')
+pacf(x2, main='Simulated AR(2) process; ar=1.5, ar2=-0.9')
+```
+Important observations:
+
+- Time series plot shows strong fluctuations, with magnitude changing over time
+- Histogram appears fairly symmetric
+- ACF oscillates slowly (complex roots; close to 1)
+- PACF has sharp cutoff at $p=2$, with second lag term being negative (negative coefficient)
+
+### Pretend we don't know what model it came from; estimate a model
+
+We use the `ar` function with MLE method.  By default, it selects a model by AIC, but that's changeable.
+
+```{r}
+(x2_ar <- ar(x2, method='mle'))
+x2_ar$order  # order of lowest AIC model
+x2_ar$ar  # parameter estimate
+x2_ar_se <- sqrt(x2_ar$asy.var)  # calc std error from asymptotic variance
+x2_ar$aic  # get the AIC for each order model
+```
+
+Note that the model with the lowest AIC will report $AIC=0$, and all the others as a difference from that baseline.  Note the very sharp dropoff in AIC from $p=1$ to $p=2$.
+
+In the async, the best model was estimated with order $p=5$, but parameters and AIC were very close to $p=2$.
+
+### Confidence Intervals on Parameters
+
+We could also calculate a Wald confidence interval for parameters.  Note: example in async is AR(1) which is more straightforward since variance is a scalar, rather than a matrix.
+```{r}
+(x2_coef1_ci <- x2_ar$ar[1] + c(-1.96, 1.96) * x2_ar_se[1,1])
+(x2_coef2_ci <- x2_ar$ar[2] + c(-1.96, 1.96) * x2_ar_se[2,2])
+```
+
+### Aside: inconsistent definitions of AIC
+
+AIC can be manually calculated ($k$ = number of params; $T$ = length of sample) as:
+
+$$ AIC = exp(\frac{2k}{T})\frac{\sum_{t=1}^T e_t^2}{T} $$
+$$ ln(AIC) = ln(\sum_{t=1}^T e_t^2) + \frac{2k}{T} = ln(MSE) + \frac{2k}{T}$$
+Some authors refer to $ln(AIC)$ as simply $AIC$.
+
+Our textbook defines it as:
+
+$$AIC = -2 log(likelihood) + 2k$$
+
+## Model Diagnosis and Testing
+
+1. AR processes have random components resembling white noise.  Do our _estimated_ residuals look like realizations generated by a white noise process?
+2. We are interested in stationary AR models.  Is our _estimated_ model stationary?  (If we forgot to remove a trend, R will actually fail to converge and give an error, helping us out!)
+
+### Diagnostics for AR(1) simulation
+
+To explore these, let's do another simulation, AR(1) this time:
+
+$$ x_t - \mu = 0.7(x_{t-1} - \mu) + w_t$$
+
+```{r}
+x1 <- w <- rnorm(1000)
+x1 <- arima.sim(n=1000, list(ar=c(0.7), ma=0))
+str(x1)
+summary(x1)
+
+plot(x1, main='Simulated AR(1) process; ar=0.7')
+hist(x1, breaks=20, main='Simulated AR(1) process; ar=0.7')
+acf(x1, main='Simulated AR(1) process; ar=0.7')
+pacf(x1, main='Simulated AR(1) process; ar=0.7')
+```
+
+These all look as expected.
+
+```{r}
+(x1_ar <- ar(x1, method='mle'))
+x1_ar$order  # order of lowest AIC model
+x1_ar$ar  # parameter estimate
+(x1_ar_se <- sqrt(x1_ar$asy.var))  # calc std error from asymptotic variance
+x1_ar$aic  # get the AIC for each order model
+```
+
+Examine the distribution of residuals (to see if they look normal):
+
+```{r}
+head(x1_ar$resid)   
+hist(x1_ar$resid[-1], breaks=20, main='Residuals')  # [-1] tells it to drop the first NA point
+qqnorm(x1_ar$resid[-1])  # [-1] tells it to drop the first NA point
+```
+Note there's no value for the first residual, because it's needed to calculate the residual for the second one since this is an AR(1) model.  For AR(2), there would be no value for the first two, etc...
+
+Both the histogram and Q-Q plot show the residuals appear to be pretty normal.
+
+### Diagnostics for AR(2) simulation
+
+First look for normality of the residuals
+```{r}
+head(x2_ar$resid)   
+hist(x2_ar$resid[-c(1,2)], breaks=20, main='Residuals')  # [-1] tells it to drop the first NA point
+qqnorm(x2_ar$resid[-c(1,2)])  # [-1] tells it to drop the first NA point
+```
+
+Now plot time series, ACF, and PACF of _residuals_. 
+
+```{r}
+# Note that the `fit$resid` object is a time series, but appending `[-c(1,2)]`
+# converts it to numeric, so we have to change it back.
+x2_resid_ts <- ts(x2_ar$resid[-c(1:5)])
+plot(x2_resid_ts, main='Residual Time Series')
+acf(x2_resid_ts, main='ACF of Residuals')
+pacf(x2_resid_ts, main='PACF of Residuals')
+```
+
+TS looks like white noise.  The ACF drops immediately (which is good), and the PACF doesn't show statistically significant lags (good).
+
+### Order Selection in an AR Model
+
+In the above examples, we chose our model based on AIC.  Alternatively, we could have used BIC, or a test set.  
+
+**IMPORTANT: Unlike in ML, we can't randomly choose points to withhold for a test set, because they'd lose the dependency.  It's common to reserve the final few points of a time series as a test set.**
+
+We should also consider what question we want to answer.  If we are forecasting, is it short term or long term?  If we have infrequent data, we may not want to use a higher order model (e.g. so we don't have to rely on 5 months of data to forecast an AR(5) model)
