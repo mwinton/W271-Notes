@@ -261,13 +261,32 @@ Higher order MA models have richer dynamics, which can be used to improve foreca
 
 Negative $\beta$ parameters in MA models will generate more volatility than positive ones.  Again, the first parameter has a bigger effect than later parameters (due to taking exponents of numbers < 1).
 
-### Invertibility
+### Invertibility Proof
 
 Now, back to the "shocks"; they are theoretical and _unobservable_.  We cannot use these for forecasting because we don't have an established statistical relationship between current and past values.
 
 The question of whether we can transform a MA model into a form where it can be described as a function of current and past values leads to the concept of _invertibility_.  If the MA process is invertible, it can be transformed into an _infinite order_ AR model that's a function of current "shock" and lagged values of the series. This transformation enables forecasting!
 
-** An $MA(q)$ process is invertible when the roots $\phi_q(B)$ all have absolute values > 1.**
+We'll demonstrate the invertibility for an MA(1) process:
+
+$$ x_t = w_t + \beta_1 w_{t-1}$$
+Rearranging, we get:
+$$ w_t = x_t - \beta_1 w_{t-1}$$
+Substituting recursivey, this becomes:
+$$ w_t = x_t - \beta_1 (x_{t-1} - \beta_1 w_{t-2}) = x_t - \beta_1 x_{t-1} + \beta_1^2 w_{t-2}$$
+If we continue for $n$ steps:
+$$ w_t = x_t - \beta_1 x_{t-1} + \beta_1^2 w_{t-2} - \beta_1^3 w_{t-3} + ... + (-\beta_1)^{n+1}w_{t-n-1} $$
+Rewriting as a sum:
+$$ w_t = \sum_{i=0}^n (- \beta_1)^i x_{t-i} + (- \beta_1)^{n+1}w_{t-n-1}$$
+Ultimately this becomes:
+$$ w_t = x_t - \beta_1 x_{t-1} + \beta_1^2 w_{t-2} - \beta_1^3 w_{t-3} + ... = \sum_{i=0}^{\infty}(- \beta_1)^i x_{t-i}$$
+
+This can be rearranged to give an equation for $x_t$:
+$$ x_t =\beta_1 x_{t-1} - \beta_1^2 w_{t-2} + \beta_1^3 w_{t-3} + ... + w_t = \sum_{i=0}^{\infty}(- \beta_1)^i x_{t-i} + w_t$$
+**This is now the _infinite order_ AR model that we can forecast with!  It's only a function of the current white noise term (aka. "shock") and the lagged values in the series!**
+
+An $MA(1)$ process is invertible when all roots $|\beta_1|<1$.  An $MA(2)$ process is invertible if $|\beta_2|<1$ and $|\beta_1| + \beta_2 <1$ (not proven here). 
+
 
 ### MA(1) Simulated Plots
 
