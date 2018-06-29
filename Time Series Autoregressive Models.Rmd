@@ -265,11 +265,9 @@ Negative $\beta$ parameters in MA models will generate more volatility than posi
 
 Now, back to the "shocks"; they are theoretical and _unobservable_.  We cannot use these for forecasting because we don't have an established statistical relationship between current and past values.
 
-The question of whether we can transform a MA model into a form where it can be described as a function of current and past values leads to the concept of _invertibility_.  If the MA process is invertible, it can be transformed into an AR model that's a function of current and past "shocks". This transformation enables forecasting!
+The question of whether we can transform a MA model into a form where it can be described as a function of current and past values leads to the concept of _invertibility_.  If the MA process is invertible, it can be transformed into an _infinite order_ AR model that's a function of current "shock" and lagged values of the series. This transformation enables forecasting!
 
 ** An $MA(q)$ process is invertible when the roots $\phi_q(B)$ all have absolute values > 1.**
-
-_NOTE: I can't follow his derivation of the invertibility condition in 8.8.1._
 
 ### MA(1) Simulated Plots
 
