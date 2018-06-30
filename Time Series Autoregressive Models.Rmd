@@ -1,5 +1,5 @@
 ---
-title: "Time Series Autoregressive Models"
+title: "Autoregressive and Moving Average Models"
 author: "Michael Winton"
 date: \today
 output:
@@ -35,7 +35,7 @@ $$ \theta_p(B) =  (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) $$
 which gives:
 $$ \theta_p(B) x_t =w_t$$
 
-The _characteristic equation_ is defined by $\alpha(B) = 0$:
+The _characteristic equation_ is defined by $\theta_p(B) = 0$:
 
 $$ \theta_p(B) =  (1 - \alpha_1 B - \alpha_2 B^2 - ... \alpha_p B^p) = 0 $$
 
