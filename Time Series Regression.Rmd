@@ -221,9 +221,6 @@ ma40_ts <- ts(ma40, start=c(1967,1), freq=12)
 
 # use ts.plot to overlay multiple time series
 par(mfrow=c(1,1))
-ts.plot(unemployment_ts, ma3_ts, ma40_ts, gpars = list(col = c("black", "red", "blue")),
-        xlab="Monthly Series", ylab="First Time Claims (in Thousands)",
-        main="US Initial Unemployment Claims (Moving Average Smoother)")
 ```
 
 The smoother that only uses 3 observations almost mirrors the original data. The one with 40 observations doesn't follow as drastically; it pulls the curve back down away from the peaks.
