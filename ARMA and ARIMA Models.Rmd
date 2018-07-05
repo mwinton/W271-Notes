@@ -55,9 +55,24 @@ The equation for $\alpha$ can also be rearranged to show that the mean $\mu$ is 
 
 $$ \mu = \frac{\alpha}{1-\phi_1 - ...- \phi_p}$$
 
+### Transforming $ARMA(p,q)$ Model to an $MA(\infty)$ or $AR(\infty)$ Model
+
+If we go back to the ARMA equation in terms of the backshift operator:
+
+$$ \phi_p(B) x_t = \theta_q(B) w_t$$
+
+we see that we can rearrange it to get an MA process ($x_t$ as a function of $w_t$):
+
+$$ x_t = \frac {\theta_q(B)}{ \phi_p(B)}  w_t \equiv \psi(B) w_t $$
+Through expansion of $\phi_p(B)$ in the denominator as a geometric series, this becomes an $MA(\infty)$ model.
+
+Likewise, we can rearrange to achieve an $AR(\infty)$ model ($w_t$ as a function of $x_t$):
+
+$$ w_t = \frac{ \phi_p(B)} {\theta_q(B)}  x_t \equiv \pi(B) x_t $$
+
 ### Derivation of Second Order Properties
 
-_Skipped for now.  Terminology in async is completely inconsistent from slide to slide._
+_Skipped.  Terminology in async is completely inconsistent from slide to slide.  It seems like it's mainly used to derive an equation corresponding to the form of the ACF plot_
 
 ### ACF and PACF plots for AR, MA, and ARMA Models
 
@@ -65,8 +80,8 @@ Reminder about the general properties of the ACF and PACF plots:
 
 Plot | AR(p) Model | MA(q) Model | ARMA (p,q) Model
 -----|-------------|-------------|-----------------
-ACF  | Tails off   | Abrupt Cut  | Tails off
-PACF | Abrupt Cut  | Tails off   | Tails off
+ACF  | Tails off   | Abrupt cutoff after lag q  | Tails off
+PACF | Abrupt cutoff after lag p | Tails off   | Tails off
 
 Because the ACF for $ARMA(1,1)$ and $AR(1)$ only differ by a constant, it's hard to use ACF plots to distinguish between the models.  In an $AR(p)$ model, as $p$ approaches 1, the series gets more persistent.  However, even with a smaller $p$, the addition of an $MA(q)$ component will also contribute to persistence.
 
@@ -170,7 +185,7 @@ Observations:
 
 #### BPNZ - ARMA(1,1) Model
 
-Next we'll try an ARMA model:
+Next we'll try an ARMA model for the sake of demo.  (The requirement of stationarity is not actually met for this time series.)
 ```{r}
 (arma11 <- arima(bpnz, order=c(1,0,1)))  # ARMA(1,1) model
 AIC(arma11)
@@ -205,7 +220,7 @@ ts.plot(bpnz, fitted(arma11), resid(arma11), lwd=c(1,2,1),
         main='ARMA(1,1) model')
 ```
 
-In-sample fit looks reasonable.
+In-sample fit looks reasonable, although generally shifted slightly to the right of actual.
 
 ```{r}
 (fcast <- forecast(arma11, h=6))
