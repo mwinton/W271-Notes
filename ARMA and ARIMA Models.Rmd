@@ -1,0 +1,260 @@
+---
+title: "ARMA, ARIMA, and SARIMA Models"
+author: "Michael Winton"
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+header-includes: \usepackage{amsmath}
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4, fig.height=3.5, warn=FALSE)
+library(car)
+library(dplyr)
+library(forecast)
+library(stargazer)
+```
+
+
+## ARMA Models
+
+The ARMA model is a stationary model, which means we will need to assume (and verify) that our data are a realization of a stationary process.  Because regression can be used to break down a nonstationary model to a trend, seasonal components, and a residual series, it's often reasonable to apply stationary models to the residuals from a time series regression.
+
+A time series is called a mixed autoregressive moving average model of order $(p,q)$ if it is _stationary_ and takes the form:
+
+$$ x_t =  \phi_1 x_{t-1} + ... + \phi_p x_{t-p}  + w_t + \theta_1 w_{t-1} + ... + \theta_q w_{t-q}$$
+We can observe that the model includes a white noise component, an AR component, and a moving average component.  This equation assumes the series has already been demeaned. 
+
+We can rewrite this equation in terms of backshift operators and simplify in order to get a very concise version of the equation.
+
+$$ x_t  - \phi_1 x_{t-1} -  ... - \phi_p x_{t-p} = w_t + \theta_1 w_{t-1} + ... + \theta_q w_{t-q}$$
+$$ x_t (1-\phi_1 B - ... - \phi_p B^p) = w_t (1 +  \theta_1 B + ... + \theta_q B^q)$$
+$$ x_t (1-\phi_1 B - ... - \phi_p B^p) = w_t (1 +  \theta_1 B + ... + \theta_q B^q)$$
+
+$$ \phi_p(B) x_t = \theta_q(B) w_t$$
+
+Important points about an $ARMA(p,q)$ model:
+
+- the process is _stationary_ when absolute value of all roots of $\phi_p$ > 0
+- the process is _invertible_ when absolute value of all roots of $\theta_q$ > 0
+- $AR(p)$ model is a special case where $q=0$
+- $MA(q)$ model is a special case where $p=0$
+- _Parsimony_: an ARMA model will often be more parameter-efficient that either AR or MA by themselves
+- Sometimes we can simplify the equation if $\phi_p$ and $\theta_q$ share a common factor
+
+If we wanted to accommodate a non-zero mean $\mu$, then we would add a constant term on the right-hand side:  $\alpha = \mu (1-\phi_1 - ...- \phi_p)$:
+
+$$ x_t = \alpha + w_t +[ \phi_1 x_{t-1} + ... + \phi_p x_{t-p} ] + [\theta_1 w_{t-1} + ... + \theta_q w_{t-q}]$$
+
+The equation for $\alpha$ can also be rearranged to show that the mean $\mu$ is stationary:
+
+$$ \mu = \frac{\alpha}{1-\phi_1 - ...- \phi_p}$$
+
+### Derivation of Second Order Properties
+
+_Skipped for now.  Terminology in async is completely inconsistent from slide to slide._
+
+### ACF and PACF plots for AR, MA, and ARMA Models
+
+Reminder about the general properties of the ACF and PACF plots:
+
+Plot | AR(p) Model | MA(q) Model | ARMA (p,q) Model
+-----|-------------|-------------|-----------------
+ACF  | Tails off   | Abrupt Cut  | Tails off
+PACF | Abrupt Cut  | Tails off   | Tails off
+
+Because the ACF for $ARMA(1,1)$ and $AR(1)$ only differ by a constant, it's hard to use ACF plots to distinguish between the models.  In an $AR(p)$ model, as $p$ approaches 1, the series gets more persistent.  However, even with a smaller $p$, the addition of an $MA(q)$ component will also contribute to persistence.
+
+We may be able to more easily distinguish (in some cases) from a PACF plot.  Recall that the PACF plot for a $AR(p)$ model cuts off abruptly after $p$ lags; a PACF plot for an $ARMA(p,q)$ plot generally will take longer to tail off.
+
+In practice, we will estimate several models and use AIC, BIC, or forecasting a test set to decide between them.
+
+### British Pound - NZ Dollar Example
+
+```{r}
+df <- read.table('pounds_nz.dat', header=TRUE)
+bpnz <- ts(df$xrate)
+str(bpnz)
+head(bpnz)
+tail(bpnz)
+
+par(mfrow=c(2,2))
+plot(bpnz)
+hist(bpnz)
+acf(bpnz)
+pacf(bpnz)
+```
+
+Observations:
+
+- Series is not stationary, so AR model is not appropriate
+- ACF tails off, so MA model doesn't seem a likely fit.  
+
+#### BPNZ - MA(5) Model
+
+We'll try an MA model anyways as a demo:
+
+```{r}
+(ma5 <- arima(bpnz, order=c(0,0,5)))  # MA(5) model
+AIC(ma5)
+BIC(ma5)
+```
+
+The first 4 coefficients are statistically significant, but we still need to do diagnostics:
+
+```{r}
+ma5r <- resid(ma5)
+
+par(mfrow=c(2,2))
+plot(ma5r)
+hist(ma5r)
+# qqnorm(ma5r)
+acf(ma5r)
+pacf(ma5r)
+```
+
+Observations:
+
+- the residuals do not appear to be a white noise series
+- ACF, PACF don't show significant autocorrelations
+
+We also do the Ljung-Box test for autocorrelation of the residual series.  The null hypothesis is of independence (no correlation):
+
+```{r}
+Box.test(ma5r, type="Ljung-Box")  # using default of 1 lag
+```
+
+The high p-value says we cannot reject the null hypothesis of independence.
+
+Now let's look at in-sample vs. out-of-sample fit:
+
+```{r}
+par(mfrow=c(1,1))
+ts.plot(bpnz, fitted(ma5), resid(ma5), lwd=c(1,2,1),
+        lty=c('solid','dashed','dashed'), col=c('black','blue','black'),
+        main='MA(5) model')
+```
+
+The in-sample fit looks reasonable.  Here's what an $MA(5)$ model would forecast:
+
+```{r}
+# do a forecast of 6 steps
+(fcast <- forecast(ma5, h=6))
+plot(fcast)
+lines(fitted(ma5), lty='dashed', col='blue')
+```
+
+
+Let's try back-testing for out-of-sample performance:
+```{r}
+bpnz_bt <- window(bpnz, end=33)  # hold out last 5 observations for testing
+ma5_bt <- arima(bpnz_bt, order=c(0,0,5))
+
+fcast_bt <- forecast(ma5_bt, h=12)
+
+par(mfrow=c(1,1))
+plot(fcast_bt)
+lines(window(bpnz, start=34), lty='solid', col='black')
+lines(fitted(ma5_bt), lty='dashed', col='blue')
+```
+
+Observations:
+
+- the forecast is way off since the actual last 6 observations changed direction
+- the forecast stays flat after 5 periods because the $MA(5)$ model can't forecast further out
+
+#### BPNZ - ARMA(1,1) Model
+
+Next we'll try an ARMA model:
+```{r}
+(arma11 <- arima(bpnz, order=c(1,0,1)))  # ARMA(1,1) model
+AIC(arma11)
+BIC(arma11)
+
+arma11r <- resid(arma11)
+par(mfrow=c(2,2))
+plot(arma11r)
+hist(arma11r)
+acf(arma11r)
+pacf(arma11r)
+
+Box.test(arma11r, type="Ljung-Box")  # using default of 1 lag
+
+```
+
+Observations:
+
+- AIC and BIC are both better than the MA(5) model
+- residual TS plot looks more like white noise
+- Ljung-Box test doesn't reject H_0 of uncorrelated residual series
+- ACF, PACF doesn't show significant correlations
+
+This looks like a better model for this data.  
+
+Now let's look at in-sample fit and forecast.
+
+```{r}
+par(mfrow=c(1,1))
+ts.plot(bpnz, fitted(arma11), resid(arma11), lwd=c(1,2,1),
+        lty=c('solid','dashed','dashed'), col=c('black','blue','black'),
+        main='ARMA(1,1) model')
+```
+
+In-sample fit looks reasonable.
+
+```{r}
+(fcast <- forecast(arma11, h=6))
+plot(fcast)
+lines(fitted(arma11), lty='dashed', col='blue')
+```
+
+Observations:
+
+- forecast still trends downwards, but not as fast as the MA(5) model
+
+Now, back-test, holding back 6 observations:
+
+```{r}
+arma11_bt <- arima(bpnz_bt, order=c(1,0,1))
+fcast_bt <- forecast(arma11_bt, h=12)
+
+par(mfrow=c(1,1))
+plot(fcast_bt)
+lines(window(bpnz, start=34), lty='solid', col='black')
+lines(fitted(arma11_bt), lty='dashed', col='blue')
+```
+
+Observations:
+
+- forecast still deviates from actual values
+- the 95% confidence interval of the forecast includes most of the actuals
+
+
+## Review: General Steps in Time Series Analysis
+
+1. Based on theory, subject matter knowledge, experience - choose a useful class of models
+2. Cleanse the data
+3. Conduct EDA: plot and examine main patterns, atypical observations:
+    - Trend
+    - Fluctuation around a trend (seasonal or cyclical/non-seasonal)
+    - Sharp changes in behavior
+    - Outliers
+    - See if ACF, PACF plots suggest we should try $AR(p)$ or $MA(q)$ models
+4. Examine and statistically test for stationarity
+5. If not stationary (and model requires it), transform it:
+    - Detrend
+    - Remove seasonality
+    - Log transformation (especially if variance increases with time)
+    - Take 1-2 differences
+6. Model TS with stationary or integrated TS model
+7. Examine validity of model's underlying assumptions:
+    - Plot residual time series, histogram, ACF, and PACF (try to confirm resids look like white noise)
+    - Ljung-Box test of the residual time series (failing to reject H_0 is good)
+8. Among valid models, pick the one with best AIC, AICc, BIC, test set, etc... performance
+9. Conduct inference and/or forecasting (only if model assumptions were validated!)
+  
