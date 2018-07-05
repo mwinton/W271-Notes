@@ -72,7 +72,7 @@ $$ w_t = \frac{ \phi_p(B)} {\theta_q(B)}  x_t \equiv \pi(B) x_t $$
 
 ### Derivation of Second Order Properties
 
-_Skipped.  Terminology in async is completely inconsistent from slide to slide.  It seems like it's mainly used to derive an equation corresponding to the form of the ACF plot_
+_Skipped.  Terminology in async is completely inconsistent from slide to slide.  It seems like it's mainly used to derive an equation corresponding to the form of the ACF plot._
 
 ### ACF and PACF plots for AR, MA, and ARMA Models
 
@@ -81,7 +81,7 @@ Reminder about the general properties of the ACF and PACF plots:
 Plot | AR(p) Model | MA(q) Model | ARMA (p,q) Model
 -----|-------------|-------------|-----------------
 ACF  | Tails off   | Abrupt cutoff after lag q  | Tails off
-PACF | Abrupt cutoff after lag p | Tails off   | Tails off
+PACF | Abrup.t cutoff after lag p | Tails off   | Tails off
 
 Because the ACF for $ARMA(1,1)$ and $AR(1)$ only differ by a constant, it's hard to use ACF plots to distinguish between the models.  In an $AR(p)$ model, as $p$ approaches 1, the series gets more persistent.  However, even with a smaller $p$, the addition of an $MA(q)$ component will also contribute to persistence.
 
@@ -89,7 +89,7 @@ We may be able to more easily distinguish (in some cases) from a PACF plot.  Rec
 
 In practice, we will estimate several models and use AIC, BIC, or forecasting a test set to decide between them.
 
-### British Pound - NZ Dollar Example
+### Example: British Pound - NZ Dollar Exchange Rate
 
 ```{r}
 df <- read.table('pounds_nz.dat', header=TRUE)
@@ -249,6 +249,163 @@ Observations:
 - forecast still deviates from actual values
 - the 95% confidence interval of the forecast includes most of the actuals
 
+## ARIMA Models
+
+ARIMA models are one way of dealing with _nonstationary_ time series, which may have trends or seasonal effects.  Simple "differencing" can off convert a _nonstationary_ time series to a _stationary_ one.  Often a first-order differencing is sufficient (but generally we don't want to go higher than 2nd order).
+
+Note: not all nonstationary time series can be deal with by differencing.  Notably, volatility clustering (conditional heteroskedasticity) that's common in financial times series requires a different kind of model.  Those are commonly model with Autoregressive Conditional Heteroskedastic (ARCH) models. 
+
+The term "integrated" arises from the fact that a differenced series needs to be aggregated in order to recover the original.  The simplest $I(0)$ process is white noise; the simplest $I(1)$ process is the random walk (because after first differencing, we have a white noise model).
+
+
+### First Differencing of a Random Walk
+
+For example, a random walk has the following form:
+
+$$ x_t = x_{t-1} + w_t$$
+
+Rearranged, we get a stationary white noise series $w_t \sim N(0,\sigma_w^2)$:
+
+$$ x_t - x_{t-1} \equiv \nabla x_t = w_t $$
+
+Just a quick refresher as to random walk time series look like.  Note that the drift term plays the same role as the slope in deterministic linear trend models.
+
+```{r}
+par(mfrow=c(2,1))
+
+# without drift
+x <- w <- rnorm(100)
+for (t in 2:length(x)) {
+  x[t] <- x[t-1] + w[t]
+}
+plot(ts(x), main='Random Walk Simulation')
+
+# with drift
+x <- w <- rnorm(100)
+del <- 0.5
+for (t in 2:length(x)) {
+  x[t] <- del + x[t-1] + w[t]
+}
+plot(ts(x), main='Random Walk Simulation w/ Drift (delta=0.5)')
+```
+
+As a reminder, the expectation value grows over time due to the drift:
+
+$$E(x_t)=x_0 + t \delta$$
+
+and the variance grows without bounds:
+  
+$$ Var(x_t) = t \sigma^2$$
+  
+The autocovariance simplifies to: 
+  
+$$\gamma_k = t \sigma^2$$
+  
+Because autocovariance is a function of time, this model is obviously _nonstationary_.  
+
+### First Differencing of a Linear Trend
+
+First differencing can also remove deterministic trends.  If we have linear trend of the following form, we can consider either first differencing (which results in an $MA(1)$ progress) or simply subtracting the trend (and analyzing residuals):
+
+$$ x_t = a + bt + w_t$$
+$$ \nabla x_t = x_t - x_{t-1} = (a - a) + (bt - b(t-1)) + (w_t - w_{t-1}) = b + w_t - w_{t-1}$$
+Reducing and rewriting in terms of the lag operator, we have a stationary $MA(1)$ process:
+
+$$ \nabla x_t  = b + \theta_q(B) w_t$$
+Alternately, we could have subtracted the trend (instead of differencing) to achieve a white noise process:
+
+$$ x_t - (a + bt) = a + bt + w_t - (a + bt) = w_t$$
+If our original time series showed increasing _variance_ over time, we should try a log transformation (and then differencing, if there's also a trend we want to try to remove).
+
+### ARIMA Terminology
+
+An $ARIMA(p,d,q)$ model is an $ARMA(p,q)$ model that's applied after taking the $d^{th}$ difference of the original time series $x_t$.  Using the lag operator, this can be expressed as:
+
+$$ \phi_p(B)(1-B)^d x_t = \theta_q(B) w_t$$
+
+### Simulate an ARIMA time series and estimate it
+
+Let's simulate this model:
+
+$$ x_t = 0.5 x_{t-1} + x_{t-1} - 0.5 x_{t-2} + w_t +0.3 w_{t-1}$$
+Rearranging:
+$$ x_t - x_{t-1} = 0.5(x_{t-1} - x_{t-2}) + w_t + 0.3 w_{t-1}$$
+$$ x_t - x_{t-1} - 0.5(x_{t-1} - x_{t-2}) = w_t + 0.3 w_{t-1}$$
+$$ \nabla x_t - 0.5 \nabla x_{t-1} = w_t - w_{t-1}$$
+Since we have $x_t$ and $x_{t-1}$ terms, we can rewrite in terms of the lag operator.  This has the form of an $ARIMA(1,1,1)$ model:
+
+$$ \nabla x_t (1 - 0.5B) = (1 + 0.3B)w_t$$
+$$ \nabla x_t = 0.5B \nabla x_t + (1+0.3B)w_t$$
+$$ \nabla x_t - 0.5 \nabla x_{t-1} = w_t + 0.3 w_{t-1} $$
+We see that after applying the first differencing operator $\nabla$, the $ARIMA(1,1,1)$ model is transformed to an $ARMA(1,1)$ stationary model with an AR parameter $\phi_1 = 0.5$ and an MA parameter of $\theta_q=0.3$.  (_Be careful of signs!_)
+
+Let's simulate this equation, and then compare plots between the original and the differenced equation:
+
+```{r}
+x <- w <- rnorm(100)
+for (t in 3:100) {
+  x[t] = 0.5 * x[t-1] + x[t-1] - 0.5 * x[t-2] + w[t] + 0.3 * w[t-1]
+}
+x_ts <- ts(x)
+
+# alternately, we could have asked arima.sim to run the simulation 
+# x_ts <- arima.sim(model=list(order=c(1,1,1), ar=0.5, ma=0.3), n=100)
+
+par(mfrow=c(1,2))
+plot(x_ts, main='Original Simulated Time Series')
+plot(diff(x_ts), main='Differenced Simulated Time Series')
+
+acf(x_ts, main='Original Simulated Time Series')
+acf(diff(x_ts), main='Differenced Simulated Time Series')
+
+pacf(x_ts, main='Original Simulated Time Series')
+pacf(diff(x_ts), main='Differenced Simulated Time Series')
+```
+
+Observations:
+
+- Differenced TS appears more stationary on the TS plot
+- ACF of differenced TS dies off much more quickly; suggests MA component
+- PACF of original and differenced TS die off after 1 lag; maybe AR(1)?
+
+Now let's estimate the model and plot the original and fitted time series.
+```{r}
+(arima111 <- arima(x_ts, order=c(1,1,1)))
+(arma11_diffed <- arima(diff(x_ts), order=c(1,0,1)))
+
+par(mfrow=c(1,1))
+ts.plot(x_ts, fitted(arima111), lwd=c(1,2),
+        lty=c('solid','dashed'), col=c('black','blue'),
+        main='ARIMA(1,1,1) model')
+
+```
+
+We see essentially the same results when we manually difference before fitting an ARMA model.  Our estimated coefficients are quite close to the true (supposedly unknown) process that we simulated.  Our fitted values from the model are quite close to the originals.
+
+Now let's do our standard diagnostics with the model's residuals:
+
+```{r}
+arima111r <- resid(arima111)
+par(mfrow=c(2,2))
+plot(arima111r, main='Residual TS')
+hist(arima111r)
+acf(arima111r)
+pacf(arima111r)
+
+Box.test(arima111r, type='Ljung-Box')
+```
+
+The plots and Ljung-Box test both fail to reject independence (ie. supporting the residual TS as a realization of a white noise process), indicating that we should be able to forecast with this model.
+
+Let's attempt forecasting:
+```{r}
+(fcast <- forecast(arima111, h=12))
+par(mfrow=c(1,1))
+plot(fcast)
+lines(fitted(arima111), lty='dashed', col='blue')
+```
+
+We observe that while the model fit is good, the forecast is essentially a flat line. WHY???
 
 ## Review: General Steps in Time Series Analysis
 
