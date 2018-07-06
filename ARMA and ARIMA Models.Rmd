@@ -405,7 +405,226 @@ plot(fcast)
 lines(fitted(arima111), lty='dashed', col='blue')
 ```
 
-We observe that while the model fit is good, the forecast is essentially a flat line. WHY???
+We observe that while the model fit is good, the forecast is essentially a flat line. 
+
+## Seasonal ARIMA Models (SARIMA)
+
+These are basically an extension of ARIMA models that add a lag equal to a number of seasons in order to remove seasonal effects.  The form of the model is $ARIMA(p,d,q)(P,D,Q)_m$ where $p,d,q$ are the nonseasonal lag terms, and $P,D,Q$ are the seasonal lag terms, where $m$ is the number of periods per year (e.g. $m=12$ for monthly seasonality, or $m=4$ for quarterly seasonality).  The $P,D,Q$ terms basically just represent backshifts of a seasonal period.  We use lowercase $\phi_p,\theta_q$ to represent nonseasonal components, and $\Phi_P, \Theta_Q$ to represent the seasonal terms:
+
+$$ \Phi_P(B^m)  (1-B^m)^D \phi_p(B) (1-B)^d x_t = \Theta_Q (B^m) \theta_q(B) w_t$$
+These terms correspond to:
+
+$$ [\text{Seasonal AR(P)}][\text{Seasonal Diff}][\text{Non-seasonal AR(p)}][\text{Non-seasonal Diff}] = [\text{Seasonal MA(Q)}][\text{Non-seasonal MA(q)}]$$
+
+For, example a monthly $ARIMA(1,1,1)(1,1,1)_4$ model looks like:
+
+$$ (1-\Phi_1 B^4) (1-B^4)^1 (1-\phi_1 B) (1-B)x_t = (1+ \Theta_1B^4)(1+\theta_1B)w_t$$
+### SARIMA Examples
+
+#### EXAMPLE 1: $ARIMA(0,0,0)(0,0,1)_12$
+
+This model indicates that a monthly value is affected by the same month's value in the previous year, is:
+
+$$x_t = \alpha x_{t-12} + w_t$$ 
+
+The characteristic equation for that formula is:
+
+$$ (1 - \alpha B^{12}) = 0$$
+Rearrange, we get:
+
+$$ B = \frac{1}{\alpha}^{1/12} = \alpha^{-1/12}$$
+The model is stationary when $|\alpha^{-1/12}|>1$.
+
+#### EXAMPLE 2: $ARIMA(0,1,0)(1,0,0)_12$
+
+$$ x_t = x_{t-1} + \alpha x_{t-12} - \alpha x_{t-13} + w_t$$
+We could also write as:
+$$ \nabla x_t = \alpha \nabla x_{t-12} + w_t$$
+which helps us understand the intuition that the _change_ at time $ t $ depends on the _change_ at the same time of the previous year. Rearranging and factorizing gives:
+
+$$ \Theta_1(B^{12})(1-B)x_t = (1-\alpha B^{12})(1-B)x_t = w_t$$
+We see the seasonal AR(1) term, with $m=12$, and the nonseasonal difference term.  This model is nonstationary, since we see that there is a root of $B=1$.
+
+#### EXAMPLE 3: Variants of seasonal moving average models
+
+A quarterly, seasonal moving average model $ARIMA(0,0,0)(0,0,1)_4$ (stationary, without a trend) is:
+
+$$ x_t = (1-\beta B^4)w_t = w_t - \beta w_{t-4}$$
+If a nonseasonal stochastic trend was also present, a $ARIMA(0,1,0)(0,0,1)_4$ model (using 1st order difference to remove the trend) could look like:
+
+$$ x_t = x_{t-1} + w_t - \beta w_{t-4}$$
+If, instead, a seasonal stochastic trend was present, the $ARIMA(0,0,0)(0,1,1)_4$ model could be used to remove the seasonal stochastic trend:
+
+$$ x_t = x_{t-4} + w_t - \beta w_{t-4}$$
+### Worked example: EU Retail Trade Index (Quarterly)
+
+```{r}
+library(fpp) # samples for Rob Hyndman's book
+data(euretail)
+str(euretail)
+```
+
+Plot the time series:
+```{r}
+par(mfrow=c(3,1))
+# original time series
+plot(euretail)
+# take seasonal difference (still not stationary)
+plot(diff(euretail, lag=4))
+# take nonseasonal and seasonal differences (better)
+plot(diff(diff(euretail, lag=4)))
+```
+
+Now let's try modeling it.  Note that if we use `sarima(...)`, then we need a slightly different form to retrieve the residuals.  The function comes with a nice, default display.
+
+```{r}
+library(astsa)
+eu_arima <- sarima(euretail, 0,1,1,0,1,1,4)
+eu_arima$ttable  # display estimated parameters
+eu_arima$AICc  # AIC, BIC are also available
+par(mfrow=c(2,2))
+eu_arimar <- resid(eu_arima$fit)
+plot(eu_arimar)
+hist(eu_arimar)
+acf(eu_arimar)
+pacf(eu_arimar)
+```
+
+Since both the ACF and PACF show significant spikes at lag $k=2$, this suggests we need to include additional nonseasonal terms.  (We don't see signifiant seasonal lags.)  Also observe that the Ljung-Box plot (nice!) rejects the null hypthesis of independence of the residuals.  So, we need to do more work on a better model.  Next, I'll go straight to the best model that the book found:
+
+```{r}
+#eu_arima <- sarima(euretail, 0,1,3,0,1,1,4)
+# eu_arima$ttable  # display estimated parameters
+# eu_arima$AICc  # AIC, BIC are also available
+# eu_arimar <- resid(eu_arima$fit)
+
+(eu_arima <- arima(euretail, order=c(0,1,3), seasonal=list(order=c(0,1,1), period=4)))
+par(mfrow=c(2,2))
+eu_arimar <- resid(eu_arima)
+plot(eu_arimar)
+hist(eu_arimar)
+acf(eu_arimar)
+pacf(eu_arimar)
+Box.test(eu_arimar, type='Ljung-Box')
+```
+
+**NOTE: I used `arima` instead of `sarima` because the latter produced an object that I couldn't pass to `forecast`.**
+
+Observations:
+
+- Residaul TS, ACF, PACF appear representative of white noise (no significant lags)
+- AICc is better than for the earlier model
+- Ljung-Box test fails to reject the null hypothesis of independence of residuals (good)
+
+Now, let's try a forecast:
+
+```{r}
+(fcast <- forecast(eu_arima, h=12))
+par(mfrow=c(1,1))
+plot(fcast)
+lines(fitted(eu_arima), lty='dashed', col='blue')
+```
+
+Observations:
+
+- the forecast follows the most recent trend
+- due to large CI, neither increasing nor decreasing trends can be ruled out
+
+### Worked example: AUS Electricity Production
+
+First load and take a quick look at the dataset.
+
+```{r}
+cbe <- read.table('cbe.dat', header=TRUE)
+head(cbe)
+elec <- ts(cbe$elec, start=1958, freq=12)
+str(elec)
+head(elec)
+tail(elec)
+summary(elec)
+quantile(elec, c(0.01,0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99))
+```
+Now look at the plots.
+```{r}
+par(mfrow=c(2,2))
+plot(elec)
+hist(elec)
+acf(elec)
+pacf(elec)
+```
+
+The first difference of removes the trend, but not the variance.  First difference of log transformed time series removes both:
+
+```{r}
+par(mfrow=c(3,1))
+plot(elec)
+plot(diff(elec), main='First Difference of TS')
+plot(diff(log(elec)), main='First Difference of Log(TS)')
+```
+We can see the improvement quantitatively:
+
+```{r}
+summary(elec)
+summary(diff(elec))
+summary(diff(log(elec)))
+```
+Now look at the ACF and PACF of the differenced and log-transformed dataset:
+
+```{r}
+elec_trans <- diff(log(elec))
+par(mfrow=c(1,2))
+acf(elec_trans, lag.max=48)
+pacf(elec_trans, lag.max=48)
+```
+
+Both still show seasonal effects, made even more clear by extending the lag axis.  I can't duplicate the results in the async slides, so I'll instead replicate the best model found in the book.  (See Cowper page 144 for an example of a function to determine the best parameters.)
+
+```{r}
+(elec_arima <- arima(log(elec), order=c(0,1,1),
+                     seasonal=list(order=c(2,0,2), period=frequency(log(elec)))))
+
+elec_arimar <- resid(elec_arima)
+par(mfrow=c(2,2))
+plot(elec_arimar)
+hist(elec_arimar)
+acf(elec_arimar)
+pacf(elec_arimar)
+
+Box.test(elec_arimar, type='Ljung-Box')
+```
+Observations:
+
+- Residaul TS, ACF, PACF appear representative of white noise (no significant lags)
+- Ljung-Box test fails to reject the null hypothesis of independence of residuals (good)
+
+Now, try forecasting:
+
+```{r}
+(fcast <- forecast(elec_arima, h=12))
+par(mfrow=c(1,1))
+plot(fcast)
+lines(fitted(elec_arima), lty='dashed', col='blue')
+```
+
+Observations:
+
+- the fitted points very closely follow the actual observations
+- finally we see a time series where the CI on the forecast is quite tight!
+
+
+We need to manually exponentiate fitted and forecasted values if we them on original scale:
+
+```{r}
+# exponentiate the forecasted values
+exp_fitted <- exp(fcast$fitted)
+exp_fcast <- exp(fcast$mean)
+exp_upper95 <- exp(fcast$upper[,'95%'])
+exp_lower95 <- exp(fcast$lower[,'95%'])
+
+ts.plot(elec, exp_fcast, exp_fitted, exp_lower95, exp_upper95, lwd=c(1,2,1,1,1),
+        lty=c('solid','dashed', 'dashed','solid','solid'), col=c('black','blue','blue','gray','gray'),
+        main='Exponentiated Forecast (Original Units')
+```
 
 ## Review: General Steps in Time Series Analysis
 
