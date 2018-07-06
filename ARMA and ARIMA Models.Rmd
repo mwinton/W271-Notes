@@ -620,10 +620,21 @@ exp_fitted <- exp(fcast$fitted)
 exp_fcast <- exp(fcast$mean)
 exp_upper95 <- exp(fcast$upper[,'95%'])
 exp_lower95 <- exp(fcast$lower[,'95%'])
+exp_upper80 <- exp(fcast$upper[,'80%'])
+exp_lower80 <- exp(fcast$lower[,'80%'])
 
-ts.plot(elec, exp_fcast, exp_fitted, exp_lower95, exp_upper95, lwd=c(1,2,1,1,1),
-        lty=c('solid','dashed', 'dashed','solid','solid'), col=c('black','blue','blue','gray','gray'),
-        main='Exponentiated Forecast (Original Units')
+# ts.plot(elec, exp_fcast, exp_fitted, exp_lower95, exp_upper95, lwd=c(1,2,1,1,1),
+#         lty=c('solid','dashed', 'dashed','solid','solid'), col=c('black','blue','blue','gray','gray'),
+#         main='Exponentiated Forecast (Original Units)', xlim=c(1980,1992))
+
+# manually recreate the forecast plot (with CI) using my exponentiated series
+plot(elec, xlim=c(1980,1992), ylim=c(6000,16000), main='Exponentiated Forecast (Original Units)')
+tmp <- seq(from = 1991, by = 1/12, length = 12)  # need x axis for drawing polygon
+polygon(x= c(tmp,rev(tmp)),y= c(exp_upper95,rev(exp_lower95)), col="lightgray", border=NA)
+polygon(x= c(tmp,rev(tmp)),y= c(exp_upper80,rev(exp_lower80)), col="lightsteelblue3", border=NA)
+lines(exp_fcast, lwd=2, lty='solid', col='blue')
+# lines(exp_upper95, lwd=1, lty='dotted', col='blue')
+# lines(exp_lower95, lwd=1, lty='dotted', col='blue')
 ```
 
 ## Review: General Steps in Time Series Analysis
