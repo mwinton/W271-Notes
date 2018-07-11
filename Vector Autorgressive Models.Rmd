@@ -1,0 +1,101 @@
+---
+title: "Vector Autoregressive Models (VAR)"
+author: "Michael Winton"
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+header-includes: \usepackage{amsmath}
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4, fig.height=3.5, warn=FALSE)
+```
+
+## Unit Root Nonstationarity Tests (not specific to multivariate TS)
+
+Recall that a characteristic equation of an AR process must have (absolute value of) all roots > 1 in order to be stationarity.  If there is a root of 1 -- a "unit root" -- then that process is nonstationary.  This allows for unit root tests for stationarity.
+
+### Augmented Dickey-Fuller Test
+
+The Augmented Dickey-Fuller (ADF) test is a test for a unit root in a time series.  The null hypothesis is that there is a unit root (ie. nonstationarity).
+
+#### TODO: look up equation and intuition
+
+The ADF test approximates the stationary process with an AR model.  In R, we use the `tseries::adf.test` function.
+
+```{r}
+library(tseries)
+data(tcm)  # built-in data on monthly treasury yields
+par(mfrow=c(3,1))
+plot(tcm1y)  
+acf(tcm1y)
+pacf(tcm1y)
+adf.test(tcm1y)
+```
+
+The plot shows this data clearly isn't stationary.  The large p-value from the ADF test tells us we do _not_ reject the null hypothesis of unit root (ie. nonstationarity).  A very persistent ACF plot, combined with a PACF plot that quickly drops off sharply are also evidence of a process having a unit root (ie. nonstationary).
+
+
+## Multiple Time Series - Context
+
+Classical linear regression models assume that stochastic errors are _uncorrelated_.  That assumption is _not_ valid for time series data.  **Two independent time series may actually _appear_ to be correlated to each other, when in reality they are just coincidental, or are both driven by some third factor.  This is called "spurious correlation".**
+
+Don't fall for temptation to fit a regression from one trending time series on another and report high $R^2$.  Common (bad) example: analysts plotting company revenue against macroeconomic time series.
+
+Is correlation a good measure of the dependency of two time series?  No.  The sample mean is only a good estimator when you can assume data is iid -- not the case for time series data.  Because sample variance, covariance, and correlation calculations use the sample mean, we correlation is not a good measure of dependency between the time series.  High calculated "correlations" may mean nothing, or even worse, could be misleading.
+
+## Cointegration
+
+Definition: two non-stationary time series $x_t, y_t$ are **cointegrated** if some linear combination of them ($a x_t + b y_t$) is stationary.
+
+#### TODO: look up random walk example
+
+## Vector AR Models
+
+Let's look at a simple case of a VAR(1) model ($w_{x,t}$ and $w_{y,t}$ are _bivariate_ white noise):
+
+$$ x_t = \phi_{11} x_{t-1} + \phi_{12} y_{t-1} + w_{x,t}$$
+$$ y_t = \phi_{21} x_{t-1} + \phi_{22} y_{t-1} + w_{y,t}$$
+In vector form, this can be written as:
+
+$$ \bf{Z_t = \Phi Z_{t-1} + w_t}$$
+where $\bf{Z_t} = {{x_t} \choose{y_t}}$, $\bf{\Phi} = {{\phi_{11}\ \phi_{12}} \choose {\phi_{21}\ \phi_{22}}}$ and $\bf{w_t} = {w_{x,t} \choose w_{y,t}}$.
+
+This can also be expressed in terms of the backshift operator:
+$$[I -\Phi(B)] Z_t =  w_t$$
+
+Stationarity of a $AR(P)$ model is defined similarly to an $AR(p)$ model: roots of the characteristic equation must all be outside the unit circle.  The characteristic equation is the _determinant_ of the $\bf{I -\Phi( } B \bf{)}$ matrix.  This can be solved algebraically, but in R we use `Mod(polyroot(...))` or `abs(polyroot(...))` (equivalent). 
+
+For example, if we have the following parameter matrix:
+
+$$
+\Phi(B) =\left[ {\begin{array}{cc}
+0.4 & 0.3 \\
+0.2 & 0.1 \\
+\end{array} } \right]
+$$
+
+The characteristic polynomial is:
+$$
+I - \Phi(B) =\left[ {\begin{array}{cc}
+1-0.4x & 0.3x \\
+0.2x & 1-0.1x \\
+\end{array} } \right]
+$$
+Now, taking the determinant, we get this polynomial:
+$$
+= (1-0.4x)(1-0.1x)-(0.3x)(0.2x) = 1 - 0.4x - 0.1x + 0.04x^2 - 0.06x^2 = 1 -0.5x - 0.02 x^2
+$$
+Plugging in to R to solve for the roots, we get:
+
+```{r}
+# these two are equivalent
+Mod(polyroot(c(1,-0.5,-0.02)))
+abs(polyroot(c(1,-0.5,-0.02)))
+```
+
