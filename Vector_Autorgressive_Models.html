@@ -128,7 +128,7 @@ $(document).ready(function () {
 
 <div id="unit-root-nonstationarity-tests" class="section level2">
 <h2>Unit Root Nonstationarity Tests</h2>
-<p>When investigating a relationship between two time series variables, we need to check whether the two models are nonstationary (ie. have unit roots). If they are, we need to decide whether or not there is a common stochastic trend.</p>
+<p>When investigating a relationship between two time series variables, we need to check whether the two models are nonstationary (ie. have unit roots). If they are, we need to decide whether or not there is a common stochastic trend. This check for stationarity will be an important step to do before any multivariate time series analysis.</p>
 <p>Recall that a characteristic equation of an AR process must have (absolute value of) all roots &gt; 1 in order to be stationarity. If there is a root of 1 – a “unit root” – then that process is nonstationary. This allows for unit root tests for stationarity.</p>
 <div id="augmented-dickey-fuller-test" class="section level3">
 <h3>Augmented Dickey-Fuller Test</h3>
@@ -182,13 +182,55 @@ pacf(tcm1y, main=NA)</code></pre>
 <h2>Multiple Time Series - Context</h2>
 <p>Classical linear regression models assume that stochastic errors are <em>uncorrelated</em>. That assumption is <em>not</em> valid for time series data. <strong>Two independent time series may actually <em>appear</em> to be correlated to each other, when in reality they are just coincidental, or are both driven by some third factor. This is called “spurious correlation”.</strong></p>
 <p>Don’t fall for temptation to fit a regression from one trending time series on another and report high <span class="math inline">\(R^2\)</span>. Common (bad) example: analysts plotting company revenue against macroeconomic time series.</p>
+<p>The reason we do unit root tests for nonstationarity is that if two time series are independent and contain unit roots (e.g. they follow independent random walks or at otherwise nonstationary), then we may see an <em>apparent</em> linear relationship, due to <em>chance similarity</em> of the processes over the period of the time series. That apparent correlation would be spurious.</p>
 <p>Is correlation a good measure of the dependency of two time series? No. The sample mean is only a good estimator when you can assume data is iid – not the case for time series data. Because sample variance, covariance, and correlation calculations use the sample mean, we correlation is not a good measure of dependency between the time series. High calculated “correlations” may mean nothing, or even worse, could be misleading.</p>
 </div>
 <div id="cointegration" class="section level2">
 <h2>Cointegration</h2>
-<p>Definition: two non-stationary time series <span class="math inline">\(x_t, y_t\)</span> are <strong>cointegrated</strong> if some linear combination of them (<span class="math inline">\(a x_t + b y_t\)</span>) is stationary.</p>
-<div id="todo-look-up-random-walk-example" class="section level4">
-<h4>TODO: look up random walk example</h4>
+<p>We can also see cases wherein two individual time series <em>do have unit roots</em>, but are actually related. In other words, they share a common stochastic trend, rather than a spurious correlation. We refer to these as <em>cointegrated</em>. The formal definition of cointegration is that: two non-stationary time series <span class="math inline">\(x_t, y_t\)</span> are cointegrated if some linear combination of them (<span class="math inline">\(a x_t + b y_t\)</span>) is stationary.</p>
+<div id="random-walk-example" class="section level3">
+<h3>Random Walk Example</h3>
+<p>Let’s make up a hypothetical example, with a random walk process <span class="math inline">\(\mu_t\)</span>:</p>
+<p><span class="math display">\[ \mu_t = \mu_{t-1} + w_t\]</span> Then let’s also assume we have two time series:</p>
+<p><span class="math display">\[ x_t = \mu_t + w_{x,t}\]</span></p>
+<p><span class="math display">\[ y_t = \mu_t + w_{y,t}\]</span> where <span class="math inline">\(w_{x,t}\)</span> and <span class="math inline">\(x_{y,t}\)</span> are independent white noise series with zero mean. These two time series <span class="math inline">\(x_t\)</span> and <span class="math inline">\(y_t\)</span> are both nonstationary. However, their difference is stationary because it’s a linear combination of (stationary) white noise terms:</p>
+<p><span class="math display">\[ x_t - y_t = \mu_t + w_{x,t} - \mu_t - w_{y,t} = w_{x,t} - w_{y,t}\]</span> Hence these two time series are cointegrated because they share the same underlying stochastic trend <span class="math inline">\(\mu_t\)</span>.</p>
+</div>
+<div id="phillips-ouliaris-test-for-cointegration" class="section level3">
+<h3>Phillips-Ouliaris test for cointegration</h3>
+<p>The Phillips-Ouliaris (PO) tests the null hypothesis that the two series are <em>not</em> cointegrated. This is implemented in R as <code>tseries::po.test</code>. The function requires the series be given in matrix form.</p>
+<p>Let’s simulate the example given above and test it:</p>
+<pre class="r"><code>x &lt;- y &lt;- mu &lt;- rep(0, 1000) # initialize to zeros
+for (t in 2:1000) {
+  mu[t] = mu[t-1] + rnorm(1)
+}
+x &lt;- mu + rnorm(1000)
+y &lt;- mu + rnorm(1000)
+
+# look at a few simulated observations
+head(cbind(mu,x,y))</code></pre>
+<pre><code>##            mu       x        y
+## [1,]  0.00000  0.4708  1.35407
+## [2,] -0.20853 -1.3248 -0.05269
+## [3,] -0.49966 -1.2999 -2.31544
+## [4,] -1.25583 -1.7944  0.60152
+## [5,]  0.06688 -0.5220  0.01311
+## [6,]  0.03575  2.0666 -1.63008</code></pre>
+<pre class="r"><code># perform the ADF test on each:
+adf.test(x)$p.value</code></pre>
+<pre><code>## [1] 0.4126</code></pre>
+<pre class="r"><code>adf.test(y)$p.value</code></pre>
+<pre><code>## [1] 0.4464</code></pre>
+<p>Based on the ADF tests, we cannot reject the null hypothesis of a unit root (nonstationarity).</p>
+<pre class="r"><code>po.test(cbind(x,y))  # need to bind the time series variables into a dataframe</code></pre>
+<pre><code>## Warning in po.test(cbind(x, y)): p-value smaller than printed p-value</code></pre>
+<pre><code>## 
+##  Phillips-Ouliaris Cointegration Test
+## 
+## data:  cbind(x, y)
+## Phillips-Ouliaris demeaned = -970, Truncation lag parameter = 9,
+## p-value = 0.01</code></pre>
+<p>The statistically significant p-value tells us that we can reject the null hypothesis that they are not cointegrated, thus providing evidence that they are cointegrated.</p>
 </div>
 </div>
 <div id="vector-ar-models" class="section level2">

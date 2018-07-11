@@ -18,7 +18,7 @@ options(digits=4, fig.height=3.5, warn=FALSE)
 
 ## Unit Root Nonstationarity Tests
 
-When investigating a relationship between two time series variables, we need to check whether the two models are nonstationary (ie. have unit roots). If they are, we need to decide whether or not there is a common stochastic trend.
+When investigating a relationship between two time series variables, we need to check whether the two models are nonstationary (ie. have unit roots). If they are, we need to decide whether or not there is a common stochastic trend.  This check for stationarity will be an important step to do before any multivariate time series analysis.
 
 Recall that a characteristic equation of an AR process must have (absolute value of) all roots > 1 in order to be stationarity.  If there is a root of 1 -- a "unit root" -- then that process is nonstationary.  This allows for unit root tests for stationarity.
 
@@ -67,13 +67,58 @@ Classical linear regression models assume that stochastic errors are _uncorrelat
 
 Don't fall for temptation to fit a regression from one trending time series on another and report high $R^2$.  Common (bad) example: analysts plotting company revenue against macroeconomic time series.
 
+The reason we do unit root tests for nonstationarity is that if two time series are independent and contain unit roots (e.g. they follow independent random walks or at otherwise nonstationary), then we may see an _apparent_ linear relationship, due to _chance similarity_ of the processes over the period of the time series.  That apparent correlation would be spurious.
+
 Is correlation a good measure of the dependency of two time series?  No.  The sample mean is only a good estimator when you can assume data is iid -- not the case for time series data.  Because sample variance, covariance, and correlation calculations use the sample mean, we correlation is not a good measure of dependency between the time series.  High calculated "correlations" may mean nothing, or even worse, could be misleading.
 
 ## Cointegration
 
-Definition: two non-stationary time series $x_t, y_t$ are **cointegrated** if some linear combination of them ($a x_t + b y_t$) is stationary.
+We can also see cases wherein two individual time series _do have unit roots_, but are actually related.  In other words, they share a common stochastic trend, rather than a spurious correlation.  We refer to these as _cointegrated_.  The formal definition of cointegration is that: two non-stationary time series $x_t, y_t$ are cointegrated if some linear combination of them ($a x_t + b y_t$) is stationary.  
 
-#### TODO: look up random walk example
+### Random Walk Example
+
+Let's make up a hypothetical example, with a random walk process $\mu_t$:
+
+$$ \mu_t = \mu_{t-1} + w_t$$
+Then let's also assume we have two time series:
+
+$$ x_t = \mu_t + w_{x,t}$$
+
+$$ y_t = \mu_t + w_{y,t}$$
+where $w_{x,t}$ and $x_{y,t}$ are independent white noise series with zero mean.  These two time series $x_t$ and $y_t$ are both nonstationary.  However, their difference is stationary because it's a linear combination of (stationary) white noise terms:
+
+$$ x_t - y_t = \mu_t + w_{x,t} - \mu_t - w_{y,t} = w_{x,t} - w_{y,t}$$
+Hence these two time series are cointegrated because they share the same underlying stochastic trend $\mu_t$.
+
+### Phillips-Ouliaris test for cointegration
+
+The Phillips-Ouliaris (PO) tests the null hypothesis that the two series are _not_ cointegrated. This is implemented in R as `tseries::po.test`. The function requires the series be given in matrix form.
+
+Let's simulate the example given above and test it:
+
+```{r}
+x <- y <- mu <- rep(0, 1000) # initialize to zeros
+for (t in 2:1000) {
+  mu[t] = mu[t-1] + rnorm(1)
+}
+x <- mu + rnorm(1000)
+y <- mu + rnorm(1000)
+
+# look at a few simulated observations
+head(cbind(mu,x,y))
+
+# perform the ADF test on each:
+adf.test(x)$p.value
+adf.test(y)$p.value
+```
+
+Based on the ADF tests, we cannot reject the null hypothesis of a unit root (nonstationarity).
+
+```{r}
+po.test(cbind(x,y))  # need to bind the time series variables into a dataframe
+```
+
+The statistically significant p-value tells us that we can reject the null hypothesis that they are not cointegrated, thus providing evidence that they are cointegrated.
 
 ## Vector AR Models
 
