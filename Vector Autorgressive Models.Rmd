@@ -14,6 +14,8 @@ fontsize: 11pt
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 options(digits=4, fig.height=3.5, warn=FALSE)
+
+library(GGally)
 ```
 
 ## Unit Root Nonstationarity Tests
@@ -107,6 +109,16 @@ y <- mu + rnorm(1000)
 # look at a few simulated observations
 head(cbind(mu,x,y))
 
+# plot the time series
+par(mfrow=c(1,1))
+ts.plot(x)
+lines(y, col='blue', lty='dashed')
+lines(mu, col='red', lty='dotted')
+
+# convert data into dataframe to do scatterplot matrix
+tmp <- data.frame(x=x,y=y,mu=mu)
+ggpairs(tmp)
+
 # perform the ADF test on each:
 adf.test(x)$p.value
 adf.test(y)$p.value
@@ -118,7 +130,7 @@ Based on the ADF tests, we cannot reject the null hypothesis of a unit root (non
 po.test(cbind(x,y))  # need to bind the time series variables into a dataframe
 ```
 
-The statistically significant p-value tells us that we can reject the null hypothesis that they are not cointegrated, thus providing evidence that they are cointegrated.
+The statistically significant p-value in the PO test tells us that we can reject the null hypothesis that they are not cointegrated, thus providing evidence for cointegration.
 
 ## Vector AR Models
 
