@@ -16,7 +16,9 @@ knitr::opts_chunk$set(echo = TRUE)
 options(digits=4, fig.height=3.5, warn=FALSE)
 ```
 
-## Unit Root Nonstationarity Tests (not specific to multivariate TS)
+## Unit Root Nonstationarity Tests
+
+When investigating a relationship between two time series variables, we need to check whether the two models are nonstationary (ie. have unit roots). If they are, we need to decide whether or not there is a common stochastic trend.
 
 Recall that a characteristic equation of an AR process must have (absolute value of) all roots > 1 in order to be stationarity.  If there is a root of 1 -- a "unit root" -- then that process is nonstationary.  This allows for unit root tests for stationarity.
 
@@ -24,22 +26,40 @@ Recall that a characteristic equation of an AR process must have (absolute value
 
 The Augmented Dickey-Fuller (ADF) test is a test for a unit root in a time series.  The null hypothesis is that there is a unit root (ie. nonstationarity).
 
-#### TODO: look up equation and intuition
+The original Dickey-Fuller test was of the null hypothesis that $\phi=1$ vs. an alternate hypothesis that $\phi<1$ in the AR(1) model $x_t = x_{t-1} + u_t$ (where $u_t = w_t$ is white noise).  The augmented Dickey-Fuller test expanded to allow $u_t$ to be any stationary process, rather than strictly white noise.
+The ADF test approximates that stationary process with an AR model.  The length of the time series determines the power of the ADF test.  In R, we use the `tseries::adf.test` function.
 
-The ADF test approximates the stationary process with an AR model.  In R, we use the `tseries::adf.test` function.
-
+According to the Cowper book, "The null hypothesis of a unit root is favoured by economists because many financial time series are better approximated by random walks than by a stationary process, at least in the short term."
 ```{r}
 library(tseries)
 data(tcm)  # built-in data on monthly treasury yields
-par(mfrow=c(3,1))
-plot(tcm1y)  
-acf(tcm1y)
-pacf(tcm1y)
+layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE))
+plot(tcm1y, main='Monthly yields of 1-year treasuries')  
+acf(tcm1y, main=NA)
+pacf(tcm1y, main=NA)
 adf.test(tcm1y)
 ```
 
 The plot shows this data clearly isn't stationary.  The large p-value from the ADF test tells us we do _not_ reject the null hypothesis of unit root (ie. nonstationarity).  A very persistent ACF plot, combined with a PACF plot that quickly drops off sharply are also evidence of a process having a unit root (ie. nonstationary).
 
+### Phillips-Perron Test
+
+This procedure estimates the autocorrelations in the stationary process $u_t$ directly, using a kernel smoother, rather than assuming the AR approximation.  Because of this, it's considered a semi-parametric test.  This shares the same null hypothesis as the ADF test (that there is a unit root, ie. process is non-stationary).  Critical values can be based on asymptotic theory or simulations.  In R, we use `tseries::pp.test`. 
+
+```{r}
+pp.test(tcm1y)
+```
+Again, we fail to reject the null hypothesis of a unit root (ie. non-stationarity).
+
+### Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test
+
+In contrast to the other tests, the KPSS test has a null hypothesis of stationarity.
+
+```{r}
+kpss.test(tcm1y)
+```
+
+With this test, we reject the null hypothesis of stationarity.
 
 ## Multiple Time Series - Context
 
