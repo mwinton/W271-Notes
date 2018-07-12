@@ -15,6 +15,7 @@ fontsize: 11pt
 knitr::opts_chunk$set(echo = TRUE)
 options(digits=4, fig.height=3.5, warn=FALSE)
 
+library(car)
 library(GGally)
 ```
 
@@ -126,6 +127,16 @@ adf.test(y)$p.value
 
 Based on the ADF tests, we cannot reject the null hypothesis of a unit root (nonstationarity).
 
+Let's test stationarity of $x_t - y_t$.  It should be stationary since the difference is just a linear combination of white noise:
+
+```{r}
+adf.test(x-y)
+```
+
+Based on this test, we reject the null hypothesis of a unit root, providing evidence of stationarity.
+
+Now, check for cointegration:
+
 ```{r}
 po.test(cbind(x,y))  # need to bind the time series variables into a dataframe
 ```
@@ -176,3 +187,225 @@ Mod(polyroot(c(1,-0.5,-0.02)))
 abs(polyroot(c(1,-0.5,-0.02)))
 ```
 
+Since the absolute value of both roots are > 1, we know that this VAR(1) model is stationary.
+
+### Simulating and estimating a VAR(1) model
+
+Let's simulate two time series with these same parameters.  First we have to simulate a multivariate white noise process for $w_{x,t}$ and $w_{y,t}$.
+
+```{r}
+# first simulate multivariate white noise
+library(mvtnorm)
+cov_mat <- matrix(c(1, 0.8, 0.8, 1), nr=2)
+w <- rmvnorm(1000, sigma=cov_mat)
+
+# observe what the simulated multivariate white noiselooks like
+head(w)
+tail(w)
+plot(w)
+
+# estimated covariance should be similar
+cov(w)
+
+# create our two multivariate white noise params
+wx <- w[,1]
+wy <- w[,2]
+head(wx)
+head(wy)
+
+# check cross-correlation
+ccf(wx, wy)
+```
+
+The `ccf` function verifies that cross-correlations are ~0 for all non-zero lags, which is required in the definition of bivariate white noise.  They are contemporaneously correlated, but do not form a lag-lead relationship.
+
+Now we'll simulate a VAR(1) process:
+
+```{r}
+x <- y <- rep(0, 1000)  # initialize to zeros
+x[1] <- wx[1]
+y[1] <- wy[1]
+for (t in 2:1000) {
+  x[t] <- 0.4 * x[t-1] + 0.3 * y[t-1] + wx[t]
+  y[t] <- 0.2 * x[t-1] + 0.1 * y[t-1] + wy[t]
+}
+
+# look at ccf:
+ccf(x,y, main='Cross-correlation function for a VAR(1) process')
+```
+
+We see the expected cross-correlation of a VAR(1) model.
+
+```{r}
+# plot the scatterplot matrix
+ggpairs(data.frame(cbind(x,y)))
+
+# plot the time series
+ts.plot(x)
+lines(y, col='blue', lty='dashed')
+
+# plot the ACF, PACF
+par(mfrow=c(2,2))
+acf(x)
+acf(y)
+pacf(x)
+pacf(y)
+```
+
+We see the correlation is close to the theoretical (based on simulation parameters).  Now let's estimate a model with `ar`:
+
+```{r}
+(xy_ar <- ar(cbind(x,y)))
+# xy_ar$ar[,,]
+```
+
+We see that the estimated parameters are reasonably close to the estimated (however, variances are very high).  
+
+### Bootstrap Confidence Intervals
+
+From Cowper:
+
+"If the simulation is repeated many times with different realisations of the bivariate white noise, the sampling distribution of the estimators of the parameters in the model can be approximated by the histograms of the esti- mates together with the correlations between estimates. This is the principle used to construct bootstrap confidence intervals for model parameters when they have been estimated from time series."
+    
+"The bootstrap simulation is set up using point estimates of the parameters in the model, including the variance of the white noise terms. Then time series of the same length as the historical records are simulated and the parameters estimated. A $(1−\alpha) × 100%$ confidence interval for a parameter is between the lower and upper $\alpha/2$ quantiles of the empirical sampling distribution of its estimates."
+
+## Example: UK and EU Exchange Rates
+
+Load data (from Cowper) and format as time series and look at "correlation"
+
+```{r}
+xrates <- read.table('us_rates.dat', header=TRUE)
+head(xrates)
+UK_ts <- ts(xrates$UK)
+NZ_ts <- ts(xrates$NZ)
+EU_ts <- ts(xrates$EU)
+
+# plot data
+ts.plot(UK_ts, NZ_ts, EU_ts, col=c('black','blue','red'))
+
+# we're not surprised to see correlation
+plot(EU_ts ~ UK_ts)
+
+# check for unit roots
+adf.test(EU_ts)
+adf.test(UK_ts)
+
+# check for cointegration
+po.test(cbind(UK_ts, EU_ts))
+```
+
+We fail to reject the null hypothesis of the ADF tests that the series have unit roots (ie. are nonstationary).  The statistically significant p-value in the PO test provides evidence of cointegration.  Since they are cointegrated, we can fit a linear regression of EU on UK:
+
+```{r}
+EU_UK_mod <- lm(UK_ts ~ EU_ts)
+summary(EU_UK_mod)
+residualPlots(EU_UK_mod)
+```
+
+Not surprisingly, the slope coefficient is highly significant, and the $R^2$ is very high.  They are quite strongly related.  We see a clear pattern in both residuals plots.  Now, we'll model the residuals as a stationary time series.  Start with the typical EDA plots:
+
+```{r}
+EU_UK_r <- resid(EU_UK_mod)
+par(mfrow=c(2,2))
+plot(EU_UK_r, main='Residuals from linear regression of UK Pound on Euro', type='l')
+plot(density(EU_UK_r))  #  can plot density as an alternative to histogram
+acf(EU_UK_r)
+pacf(EU_UK_r)
+```
+
+If EU and UK data are cointegrated, we can find a linear relationship such that there's a stationary time series.  The EDA plots indicate an AR(1) model may be appropriate.   Let's use the `ar` function (which decides based on AIC).
+
+```{r}
+(EU_UK_r_mod <- ar(EU_UK_r))
+
+# do diagnostics on the residuals from this model
+mod_resids <- na.omit(EU_UK_r_mod$resid)
+plot(mod_resids)
+qqnorm(mod_resids)
+acf(mod_resids)
+pacf(mod_resids)
+```
+
+The diagnostics look pretty much like white noise, although we'd rather the PACF not show any significant lags.
+
+## Example 2: Cardiovascular Mortality, Temp, and Particulate Matter
+
+```{r include=FALSE}
+library(astsa)
+library(vars)
+```
+
+Load data from `astsa` package.  For this example, we'll use the `vars` package, too.
+
+```{r}
+cmtp <- cbind(cmort, tempr, part)
+head(cmtp)
+par(mfrow=c(1,1))
+plot.ts(cmtp)  # gives a nicer display than ts.plot (which overlays them)
+
+# look at correlation between the time series
+ggpairs(data.frame(cmtp))
+ccf(cmort, tempr)
+ccf(cmort, part)
+ccf(tempr, part)
+
+# plot ACF and PACF plots
+par(mfrow=c(3,2))
+acf(cmort)
+pacf(cmort)
+acf(tempr)
+pacf(tempr)
+acf(part)
+pacf(part)
+par(mfrow=c(1,1))
+```
+
+We see they all have strong seasonality.  Temperature and particulates don't seem particularly contemporaneously correlated (based on scatterplot); the others are more so.  All of the cross-correlation plots show strong lag-lead cross-correlation, too.    ACF plots all show strong persistence.  PACF plots also show quite a few significant lags.
+
+Fit a VAR(1) model for the sake of a demo (not because EDA suggests it):
+
+```{r}
+summary(VAR(cmtp, p=1, type='both'))  # 'both' means both constant (drift) and trend
+```
+
+Review the summary to see lots of interpretations about relationships between the time series, roots of characteristic equations, etc......
+
+Now, let `var` package fit models with multiple values for $p$, since we had no particular reason to pick VAR(1) before.  Note that $SC(n) = BIC$.
+
+```{r}
+VARselect(cmtp, lag.max=10, type='both')
+```
+
+Let's look at the results of the $VAR(2)$ model, recommended by BIC.  Parsimonious models are usually better for forecasting.
+
+```{r}
+summary(var2_fit <- VAR(cmtp, p=2, type='both'))
+```
+
+And do the diagnostics on the residuals:
+
+```{r}
+par(mfrow=c(2,2))
+ts.plot(resid(var2_fit))
+qqnorm(resid(var2_fit))
+acf(resid(var2_fit), lag.max=52)
+pacf(resid(var2_fit), lag.max=52)
+```
+
+We can also test the serial correlation between the residuals with the Portmanteau Test:
+
+```{r}
+serial.test(var2_fit, lags.pt=12, type = 'PT.adjusted')
+```
+
+The highly statistically significant p-value tells us that we strongly reject the null hypothesis. (TODO:figure out what the null hypothesis is.)
+
+Now, do 4-week and 8-week forecasts with this model:
+
+```{r}
+fcast <- predict(var2_fit, n.ahead=24, ci=0.95)  # 4 weeks ahead
+fanchart(fcast)  # plot prediction and error
+
+fcast <- predict(var2_fit, n.ahead=48, ci=0.95)  # 8 weeks ahead
+fanchart(fcast)  # plot prediction and error
+```
