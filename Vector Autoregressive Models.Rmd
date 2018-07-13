@@ -392,15 +392,15 @@ acf(resid(var2_fit), lag.max=52)
 pacf(resid(var2_fit), lag.max=52)
 ```
 
-We can also test the serial correlation between the residuals with the Portmanteau Test:
+We can also test the serial correlation between the residuals with the Portmanteau Test.  Its null hypothesis is that there is no autocorrelation (or serial correlation) among the residuals.  The alternate hypothesis is that at least one lag has a non-zero coefficient (and thus there's autocorrelation).  The Ljung-Box test we performed on ARIMA models using `box.test` is also a type of Portmanteau test.  However, we use `serial.test` for VAR models.
 
 ```{r}
 serial.test(var2_fit, lags.pt=12, type = 'PT.adjusted')
 ```
 
-The highly statistically significant p-value tells us that we strongly reject the null hypothesis. (TODO:figure out what the null hypothesis is.)
+The highly statistically significant p-value tells us that we strongly reject the null hypothesis (of independence / no correlation between residuals).
 
-Now, do 4-week and 8-week forecasts with this model:
+Now, do 4-week and 8-week forecasts with this model for the sake of demonstration:
 
 ```{r}
 fcast <- predict(var2_fit, n.ahead=24, ci=0.95)  # 4 weeks ahead
