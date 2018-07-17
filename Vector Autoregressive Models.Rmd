@@ -145,11 +145,17 @@ The statistically significant p-value in the PO test tells us that we can reject
 
 ## Vector AR Models
 
+In VAR models, all variables are treated symmetrically, ie. they affect each other.  We don't limit ourselves to a unidirectional relationship where predictors influence the forecast variable.  For example, increased income leads to increased spending, which leads to increased income, etc...   In the VAR model, all variables are modeled as if they influence each other equally.  If you put a lag on a particular variable in one equation, you need to put it in every equation. We call them _endogenous_.  
+
+**All of the time series have to be stationary because it's an extension of an AR model (VAR in level).**  If series are not stationary, you may need to take differences to transform it into a stationary series (VAR in difference).  For a cointegrated series (where a difference of two equations is stationary), there's something called VECM (Vector Error Correction Model).  Vector ARMA model sounds theoretically possible, but in reality is near impossible to identify empirically due to the large number of parameters.
+
+### VAR Mathematical Model
+
 Let's look at a simple case of a VAR(1) model ($w_{x,t}$ and $w_{y,t}$ are _bivariate_ white noise):
 
 $$ x_t = \phi_{11} x_{t-1} + \phi_{12} y_{t-1} + w_{x,t}$$
 $$ y_t = \phi_{21} x_{t-1} + \phi_{22} y_{t-1} + w_{y,t}$$
-In vector form, this can be written as:
+We see from the $t$ subscripts on the white noise terms that they are contemporaneously correlated.  In vector form, this can be written as:
 
 $$ \bf{Z_t = \Phi Z_{t-1} + w_t}$$
 where $\bf{Z_t} = {{x_t} \choose{y_t}}$, $\bf{\Phi} = {{\phi_{11}\ \phi_{12}} \choose {\phi_{21}\ \phi_{22}}}$ and $\bf{w_t} = {w_{x,t} \choose w_{y,t}}$.

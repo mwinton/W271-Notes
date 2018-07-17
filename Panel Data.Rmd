@@ -1,0 +1,87 @@
+---
+title: "Panel Data"
+author: "Michael Winton"
+date: \today
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+header-includes: \usepackage{amsmath}
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4, fig.height=3.5, warn=FALSE)
+
+library(car)
+library(GGally)
+library(plm)
+library(Ecdat)  # sample datasets
+library(wooldridge)  # sample datasets
+```
+
+## Introduction
+
+## Example First Differences Model: Grunfeld 
+
+We use the `plm` (Panel Linear Model) function in R.
+
+```{r}
+data("Grunfeld")
+str(Grunfeld)
+head(Grunfeld)
+tail(Grunfeld)
+
+# look at the panels
+table(Grunfeld$firm)
+# look at the time index
+table(Grunfeld$year)
+
+# explicitly define the data structure
+Grunfeld <- plm.data(Grunfeld, index=c('firm', 'year'))
+str(Grunfeld)
+
+# quick EDA
+hist(Grunfeld$inv, breaks=50)
+# scatterplot matrix
+ggpairs(Grunfeld, columns=c('value', 'capital'))
+# both are skewed, so try logs
+scatterplotMatrix(~log(value) + log(capital), data=Grunfeld)
+```
+
+The First Difference model can eliminate time-invariant individual observed heterogeneity. 
+```{r}
+# simple (naive) model as an example
+grun_fd <- plm(inv ~ value + capital, data=Grunfeld, model='fd')
+summary(grun_fd)
+```
+
+Recall that first difference model is written in terms of _changes_ in each variable from one time to another.  We see from the estimated regression coefficients that positive _changes_ in value and capital lead to positive _change_ in investment (inv).
+
+## Example First Differences Model: Wooldridge
+
+```{r}
+data(crime3)
+str(crime3) 
+
+# we use district and year to set up the panel data
+table(crime3$district)
+table(crime3$year)
+
+# the "c" variables are already defined as changes, so could just do lm
+# but don't do it this way.  better to use plm functions
+summary(lm(clcrime ~ cavgclr, data=crime3))
+
+# build panel dataframe (either of these ways should work)
+crime3_panel_df <- pdata.frame(crime3, index=c('district','year'),
+                               drop.index=TRUE, row.names=TRUE)
+# crime3_panel_df <- plm.data(crime3, index=c('district','year'))
+
+# estimate model (don't use the previous "change" variables)
+crime3_plm <- plm(lcrime ~ avgclr, data=crime3_panel_df, model='fd')
+summary(crime3_plm)
+```
+
+**NOTE: Jeff's identical code in async 11.7.2 generates different results.**
