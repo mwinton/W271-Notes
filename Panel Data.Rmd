@@ -24,6 +24,116 @@ library(wooldridge)  # sample datasets
 
 ## Introduction
 
+Panel data is also referred to as longitudinal data.  It has both cross-section and time series elements (although typically a limited number of time series observations).  It involves repeat sampling of the same individuals, companies, cities, etc... repeatedly.  It enables us to understand behavioraly dynamics as well as their relation to other variables.  
+
+Within-individual change is characterized by some relevant summary of changes in the repeated measurements on each individual.  We expect correlation between multiple observations for a particular individual over time.  We also expect heterogenous variability - change in the variance of the responses over the duration of the study.  **These features violate the fundamental independence assumption in many traditional statistical techniques (including OLS regression).**  We cannot treat $n$ "once-repeated" observations the same as $2n$ independent observations.  (We could confirm this with a Durbin-Watson test if we wanted.)
+
+Statistical models for longitudinal data have two main features:
+
+1. a model for the covariance among repeated measures
+2. a model for the mean response, and its dependence on covariates
+
+## EDA on a 2-Period Panel
+
+First, find out how many panels there are.  Then explore patterns of features in each panel.  We also need to look at "dynamic temporal dependence" of features.
+
+```{r}
+data(crime2)
+# str(crime2)
+# head(crime2)
+
+# find number of panels (in this case, 46)
+table(crime2$year)
+```
+
+Recognize that distributions may change over time, and also that the relationship between outcome variable and predictors may change over time.  `unem` in the following plot is an example of both.
+
+```{r}
+# note the syntax for plotting plotting by year
+scatterplotMatrix(~crmrte + unem + polpc | year, data=crime2)
+
+# boxplots for each panel (ggplot2 w/ jitter looks better)
+boxplot(crmrte ~ year, data=crime2)
+boxplot(unem ~ year, data=crime2)
+
+# look at summary stats for each panel (outcome)
+summary(crime2$crmrte[crime2$year==82])
+summary(crime2$crmrte[crime2$year==87])
+
+# look at summary stats for each panel (predictors)
+summary(crime2$unem[crime2$year==82])
+summary(crime2$unem[crime2$year==87])
+
+# scatterplot shows that relationship changes with time
+with(crime2,
+     plot(unem, crmrte, col=c('blue','red')[as.factor(year)])
+)
+```
+
+If we were to naively do a separate OLS regression for each year, they likely would suffer from omitted variable biases.
+
+## Unobserved Effect Models (aka. Fixed Effect Models)
+
+Using a panel dataset, we can effectively deal with unobserved variables and also capture a dynamic that would not have been possible with cross-section data.  There are two types of unobserved variables:
+
+1. Time invariant
+2. Time-varying
+
+Let's look at the mathematical model for a 2-period unobserved effect (fixed effect) model:
+
+$$ y_{it} = \beta_0 + \delta_0 d2_t + \beta_1 x_{it} + a_i + \epsilon_{it}$$
+where $t=1,2$.  $d2_t$ is a dummy variable for $t=2$.  $\epsilon_{it}$ is the idiosyncratic error, which is time-varying.  $a_i$ represents _all_ unboserved, time invariant variables that effect $y_{it}$.  (Other names for this include unobserved effect, fixed effect, and unobserved heterogeneity.)
+
+## Pooled OLS (applied to an Unobserved Effect Model)
+
+We'll use the `crime` dataset as an example.  We could _pool_ the data for the two years and use OLS.  The drawback is that pooled OLS requires that the observed explanatory variable $x_{it}$ and the observed effect $a_i$ are _uncorrelated_ in order to produce a _consistent_ estimator for $\beta_1$.
+
+For pooled OLS, we rewrite the equation in a _composite error_ form:
+
+$$ crmrte_{it} = \beta_0 + \delta_0 d87_t + \beta_1 unem_{it} + \mu_{it}$$
+where in reality $\mu_{it} = a_i + \epsilon_{it}$.
+
+Recall that OLS requires that $x_{it}$ (in this case $unem_{it}$) be uncorrelated with $\mu_{it}$.  This is unlikely to hold with panel data since the same observations are observed multiple times.  Even if $\epsilon_{it}$ is uncorrelated with $x_{it}$, it's likely that the pooled OLS estimate will be biased and inconsistent if $a_i$ and $x_{it}$ are correlated.  This **heterogeneity bias** is the result of omitting time-invariant, individual-specific variables from the model.
+
+```{r}
+# pooled OLS does a bad job with the crime2 data
+summary(lm(crmrte~d87 + unem, data=crime2))
+```
+
+What's wrong with this model?
+
+- coefficients are statistically significant
+- `unem` coefficient is not practically significant either
+- model explains almost none of the data (poor $R^2)
+- serial correlation of repeated observations causes standard errors and test stats to be invalid
+
+## First Difference Models
+
+With panel data, though, we can avoid the _heterogeneity bias_ issues, and the need to make an unrealistic assumption about lack of correlation between $a_i$ and $x_{it}$, that come with pooled OLS.  Instead we should use first differencing.  In these models, it is acceptable for $a_i$ and $x_{it}$ to be correlated.
+
+In the `crmrte2` example, we want to allow unobserved variables about the cities to be correlated with the observed explanatory variables like `unem`. We use first differencing to remove these unobserved variables and estimate the variables of interest.  
+
+Take these two equations for $t=1,2$:
+
+$$ y_{i2} = \beta_0 + \delta_0 (1) + \beta_1 x_{i2} + a_i + \epsilon_{i2}$$
+$$ y_{i1} = \beta_0 + \delta_0 (0) + \beta_1 x_{i1} + a_i + \epsilon_{i1}$$
+Subtracting from each other "differences away" the $a_i$ term:
+
+$$ y_{i2} - y_{i1} = \delta_0  + \beta_1 (x_{i2} - x_{i1}) + \epsilon_{i2} - \epsilon_{i1}$$
+$$ \Delta y_i = \delta_0  + \beta_1 \Delta x_i + \Delta \epsilon_i$$
+
+This "first difference" equation is simply a cross-sectional equation in which each variable is differenced over two consecutive time periods.   Using this, we can estimate the model using OLS and conduct inference, assuming the CLM assumptions are met.  Specifically, this requires that $\Delta \epsilon_i$ is uncorrelated with $\Delta x_i$.  This holds if $\epsilon_i$ is uncorrelated with the explanatory variable $x_i$ in _both_ time periods.  This is a **strict exogeneity** assumption.
+
+In the case of the `crime2` dataset, the "change" in `crmrte` and `unem` are already given as `ccrmrte` and `cunem`, so we can just estimate the model with `lm`.
+
+```{r}
+summary(lm(ccrmrte ~ cunem, data=crime2))
+```
+
+Contrary to before (with pooled OLS), we have a statistically sigficant estimator for `unem` and an improved $R^2$.  In this case, a 1% increase in unemployment rate is associated with an estimated 2.2% increase in crime rate.
+
+**NOTE: this model will not work if an explanatory variable is constant over the time period, because it will also be differenced away.**
+
 ## Example First Differences Model: Grunfeld 
 
 We use the `plm` (Panel Linear Model) function in R.
@@ -85,3 +195,11 @@ summary(crime3_plm)
 ```
 
 **NOTE: Jeff's identical code in async 11.7.2 generates different results.**
+
+## Distributed Lag Models
+
+Panel data can also be used to estimate a _distributed lag_ model in which the response variable is associated with one or more lags of a single explanatory variable.  For example, we could consider a model in which this year's crime rate is deterred by last year's conviction rate (`clrpc`), as well as the previous year's:
+
+$$ log(crime_{it}) = \beta_0 + \delta_0 d78_t + \beta_1 clrpc_{i,t-1} + \beta_2 clrpc_{i,t-2} + a_i + \epsilon_{it}$$
+
+**NOTE: the async slides do not show the R code used to predict this type of model.**
