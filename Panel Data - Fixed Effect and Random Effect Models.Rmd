@@ -1,0 +1,148 @@
+---
+title: "Panel Data - Fixed Effect and Random Effect Models"
+author: "Michael Winton"
+date: \today
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+header-includes: \usepackage{amsmath}
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4, fig.height=3.5, warn=FALSE)
+
+library(car)
+library(GGally)
+library(plm)
+library(Ecdat)  # sample datasets
+library(wooldridge)  # sample datasets
+```
+
+## Fixed Effect Transformation
+
+Whereas the First Difference models eliminate the time-invariant unobserved variables by subtracting one observation from another, the Fixed Effect Transformation involves subtracting out the individual's average (over time) from each observation.
+
+If we have observations from $i=1,2,...n$ individuals and $t=1,2,...T$ periods:
+
+$$y_{it} = \beta_0 + \beta_1 x_{it} + a_i + \epsilon_{it}$$
+Averaging individuals over time:
+
+$$\bar{y}_i = \beta_0 + \beta_1 \bar{x}_i + \bar{a}_i + \bar{\epsilon}_{it} $$
+
+Subtracting, we get:
+
+$$ y_{it} - \bar{y}_i =  \beta_1 (\bar{x}_i - \bar{x}_i) +  (\epsilon_{it} - \bar{\epsilon}_{it}) $$
+Notice that both the intercept $\beta_0$ and the time-invariant unobserved variables $a_i$, also known as the _unobserved individual heterogeneity_ have dropped out.  We refer to $y_{it} - \bar{y}_i$ as the _demeaned_ response variable.
+
+The more general form of the equation with $k$ explanatory variables is:
+
+$$ y_{it} - \bar{y}_i =  \beta_1 (\bar{x}_{i1} - \bar{x}_{i1}) +  \beta_2 (\bar{x}_{i2} - \bar{x}_{i2}) +  ... + \beta_k (\bar{x}_{ik} - \bar{x}_{ik}) +  + (\epsilon_{it} - \bar{\epsilon}_{it}) $$
+
+As with the First Difference transformation, any explanatory variables that are constant in the dataset will be dropped out, too.  Variables with very little variation will become almost constant after transformation.  _Interactions_ with time-invariant variables can be estimated through use of (time) dummy variables.  However, if a full set of time dummies is included, then its impossible to estimate the effect of deterministic time-varying variables because they can't be distinguished from aggregate time effect.
+
+#### Estimating Fixed Effects model with OLS
+
+This time-demeaned equation can then be estimated by OLS.  It uses time variation _within_ each of the cross-sectional units (subjects) in the dataset.  Because of this, the fixed effect transformation is also called _within transformation_. CLM assumptions are still required in order for estimators to be consistent.  $\epsilon_{it}$ must have zero-conditional mean ($E(\epsilon_{it} | X_i, a_i)=0 \  \forall t$), homoskedasticity, and serially uncorrelated across $t$.
+
+The poolability test in `pooltest` has a null hypothesis that the slope coefficient is constant across time.  The serial correlation test in `pbgtest` has a null hypothesis of _no_ serial correlation.  
+```{r}
+data("Grunfeld")
+head(Grunfeld)
+
+# test for poolability
+znp <- pvcm(inv ~ value + capital, data=Grunfeld, model='within')
+zplm <- plm(inv ~ value + capital, data=Grunfeld)
+pooltest(zplm, znp)
+
+# test for serial correlation
+grun_panel <- pdata.frame(Grunfeld, index=c('firm','year'))
+grun_fe <- plm(inv ~ value + capital, data=grun_panel, model='within')
+pbgtest(grun_fe, order=2)
+```
+
+In this case, we strongly reject the null hypothesis for poolability and for no serial correlation.
+
+
+### Between Estimators
+
+We do not focus on the coefficients of the "average" equation above, as they are biased when the observed explanatory variables $x$ are correlated with the unobserved fixed effect $a_i$.  Additionally, these don't use the panel data efficiently, as they lose the time element.
+
+If we think the explanatory variables and the unobserved fixed effect are _uncorrelated_, we would be better off using the **random effect model**.
+
+### Example: job training effect on manufacturing scrap rate
+
+```{r}
+data(jtrain)  # from Wooldridge
+str(jtrain)
+table(jtrain$year)
+# head(jtrain,12)
+```
+
+We see there are 157 individuals in the panel.  We have indicator variables for `d88` and `d89`.
+
+```{r}
+# split the dataframe by year
+tmp <- split.data.frame(jtrain, as.factor(jtrain$year))
+jtrain_87 <- tmp$'1987'
+jtrain_88 <- tmp$'1988'
+jtrain_89 <- tmp$'1989'
+```
+#### OLS Method (1987 only)
+```{r}
+# let's ignore 1988 and 1989, and estimate a model based on 1987
+# employ = number of employees
+# hrsemp = number of hours of training per employee
+# sales = annual firm sales in $
+# scrap = # units scrapped
+# "l" columns indicate logs
+summary(cbind(jtrain_87$lscrap, jtrain_87$lsales, jtrain_87$hrsemp, jtrain_87$lemploy))
+jtrain87_ols <- lm(lscrap ~ hrsemp + lemploy + lsales, data=jtrain_87)
+summary(jtrain87_ols)
+```
+
+This model doesn't tell us anything about change over time, nor does it remove the time-invariant unobserved variables.  As a result, it's possible to have omitted variable bias.
+
+#### The `plm` function
+
+Now let's look at a proper panel model using `plm`.  The `plm` function supports 4 estimation methods:
+
+  1. pooled OLS (model='pooling')
+  2. fixed effects (model='within')
+  3. random effects (model='random')
+  4. first differences (model='fd')
+  5. between (model='between')
+
+It also supports unbalanced panels, two-way effects, and instrumental variables.  For example, if you have a model $y$ is related to $x1$ and $x2$ endogenous variables, $x3$ exogenous variable,and $z1$ and $z2$ external instructions, it could specified as either:
+
+    - y ~ x1 + x2 + x3 | x3 + z1 + z2
+    - y ~ x1 + x2 + x3 | x. -x1 -x2 + z1 + z2
+
+The `plm` function expects data in a _person-period_ format (ie. one row per person per time period observation).  The `pdata.frame` call is used to add an index to a data frame.
+
+#### Example: First-Difference Method
+
+```{r}
+# specify index as (individuals, periods)
+jtrain_panel <- pdata.frame(jtrain, index=c('fcode','year'))
+# show a sample to see how index is applied
+str(jtrain_panel$scrap)
+
+# first difference model
+jtrain_fd <- plm(lscrap ~ hrsemp + lsales + lemploy, data=jtrain_panel, model='fd')
+summary(jtrain_fd)
+```
+#### Example: Fixed Effects Method
+
+```{r}
+# fixed effects model
+jtrain_fe <- plm(lscrap ~ hrsemp + lsales + lemploy, data=jtrain_panel, model='within')
+summary(jtrain_fe)
+```
+
+## Random Effects Models
+
