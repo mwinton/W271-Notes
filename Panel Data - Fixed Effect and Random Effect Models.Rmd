@@ -20,6 +20,7 @@ library(car)
 library(GGally)
 library(plm)
 library(Ecdat)  # sample datasets
+library(stargazer) # summarize models
 library(wooldridge)  # sample datasets
 ```
 
@@ -146,3 +147,58 @@ summary(jtrain_fe)
 
 ## Random Effects Models
 
+The random effects model includes all of the assumptions of the fixed effects model, but also includes the strong requirement that $a_i$ is independent of _all_ explanatory variables in _all_ time periods.
+
+When we can't meet that strong requirement of independence of $a_i$, we used the fixed effect model as a tool for eliminating omitted variable bias.  If we do meet the requirement that $a_i$ is independent, we can get consistent OLS estimators of the regression coefficients $\hat{\beta_j}$ from a single cross-section of our data; we don't need the whole panel.  The value of the random effects model doesn't come in here.
+
+As we did earlier for pooled OLS, we rewrite the equation in a _composite error_ form:
+
+$$ y_{it} = \beta_0 + \beta_1 x_{1it} + ... + \beta_k x_{kit}+ \mu_{it}$$
+where in reality $\mu_{it} = a_i + \epsilon_{it}$, and $i=1...n$ and $t=1...T$.  Because $a_i$ is contained in the composite error term in _each time period_, $\mu_{it}$ is serially correlated.  The value in the random effects is that we can use random effects to overcome this serial correlation.
+
+Since pooled OLS _ignores this serial correlation_, it usually results in invalid standard errors and test statistics, even if $a_i$ is uncorrelated with the explanatory variables  The random effects model uses Generalized Least Squares (rather than OLS).  For GLS to have good properties, we need a "short panel", meaning a large $N$ but a small number of $T$ periods.  The GLS transformation that eliminates serial error correlation is (with $\lambda$ between 0-1):
+
+$$ \lambda = \bigg[ \frac{\sigma_e^2}{\sigma_e^2 + T \sigma_a^2} \bigg]^{1/2}$$
+
+The transformed model becomes (where the overbar indicates time averages) :
+
+$$ y_{it} - \lambda \bar{y}_i = \beta_0 (1 - \lambda) + \beta_1(x_{1it}- \bar{x}_{1i}) + ... + \beta_k (x_{kit}- \bar{x}_{ki}) + (\mu_{it} - \lambda \bar{\mu}_i)$$
+
+So, in words, whereas the fixed effects model subtracts the _entire_ time averages from the corresponding variables, the random effects model subtracts a _fraction_ of those time averages, with that fraction $\lambda$ being a function of $\sigma_e, \sigma_a, T$.  The GLS estimator is simply the pooled estimator of this transformed equation.
+
+In practice, we will not know the actual $\sigma_e, \sigma_a$, so we will need to estimate $\lambda$ based on pooled OLS or fixed effect residuals.  The `plm` package will automatically calculate the random effect estimator $\hat{\lambda}$.  Under random effect assumptions, this estimator $\hat{\lambda}$ will be consistent and asymptotically normally distributed for large $N$ and fixed $T$.
+
+One important benefit of the random effects model (contrasted against the fixed effects model) is that it allows for time-independent explanatory variables.  With the random effects model, they do not get completely subtracted out.
+
+## Example: comparing models with wage data
+
+In reality, when we are estimating either FE or RE models, it's usually informative to also run a pooled OLS model.  Comparing the results of the 3 models can help identify the nature of biases left completely in the composite error term (pooled OLS), or partially so (RE).
+
+Let's do an example with wage data vs. education and race dummies, which drop out of the FE model since they're constant over time, as well as time-varying variables for experience (and also its square), union, and married.
+
+```{r}
+data("wagepan")  # this is a short panel (545 individuals, 8 periods)
+wage_plm <- pdata.frame(wagepan, index=c('nr', 'year'))
+mod_pooled <- plm(lwage ~ educ + black + hisp + exper + exper^2 + married + union, 
+                  data=wage_plm, model='pooling')
+mod_re <- plm(lwage ~ educ + black + hisp + exper + exper^2 + married + union, 
+                  data=wage_plm, model='random')
+mod_fe <- plm(lwage ~ educ + black + hisp + exper + exper^2 + married + union, 
+                  data=wage_plm, model='within')
+stargazer(mod_pooled, mod_re, mod_fe, type="text", omit.stat='f',
+          column.labels=c('Pooled','RE','FE'))
+```
+Observations:
+
+    - Coefficients for education, black, and hispanic are similar for pooled and RE
+    - Pooled OLS standard errors underestimate the true errors due to serial correlation
+    - Compared to pooled model, marriage and union effects are much smaller in RE model
+    - In FE model, (which eliminates unboserved fixed effects), marriage and union effects both drop substantially
+    
+## Takeaways: Fixed Effects vs. Random Effects
+
+Because FE model allows for arbitrary correlation between $a_i$ and explanatory variables (RE does not), FE is considered a more convincing tool for determining "ceteris paribus" effects.  However, random effects models are particularly important if the explanatory variables are constant over time.  
+
+Also, RE model is generally more _efficient_ (ie. needs fewer observations to achieve a given performance) than the Pooled OLS model. 
+    
+Just keep in mind that the assumption that $a_i$ is uncorrelated with all explanatory variables over time is often not a reasonable assumption.  When we use it, we should give substantial reasons why we consider it valid.  There is also a **Hausman** test for the full set of RE assumptions.
