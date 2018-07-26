@@ -46,7 +46,7 @@ $$ y_{it} - \bar{y}_i =  \beta_1 (\bar{x}_{i1} - \bar{x}_{i1}) +  \beta_2 (\bar{
 
 As with the First Difference transformation, any explanatory variables that are constant in the dataset will be dropped out, too.  Variables with very little variation will become almost constant after transformation.  _Interactions_ with time-invariant variables can be estimated through use of (time) dummy variables.  However, if a full set of time dummies is included, then its impossible to estimate the effect of deterministic time-varying variables because they can't be distinguished from aggregate time effect.
 
-#### Estimating Fixed Effects model with OLS
+### Estimating Fixed Effects model with OLS
 
 This time-demeaned equation can then be estimated by OLS.  It uses time variation _within_ each of the cross-sectional units (subjects) in the dataset.  Because of this, the fixed effect transformation is also called _within transformation_. CLM assumptions are still required in order for estimators to be consistent.  $\epsilon_{it}$ must have zero-conditional mean ($E(\epsilon_{it} | X_i, a_i)=0 \  \forall t$), homoskedasticity, and serially uncorrelated across $t$.
 
@@ -69,48 +69,15 @@ pbgtest(grun_fe, order=2)
 In this case, we strongly reject the null hypothesis for poolability and for no serial correlation.
 
 
-### Between Estimators
+## Between Estimators
 
 We do not focus on the coefficients of the "average" equation above, as they are biased when the observed explanatory variables $x$ are correlated with the unobserved fixed effect $a_i$.  Additionally, these don't use the panel data efficiently, as they lose the time element.
 
 If we think the explanatory variables and the unobserved fixed effect are _uncorrelated_, we would be better off using the **random effect model**.
 
-### Example: job training effect on manufacturing scrap rate
+## The `plm` function for panel data modeling
 
-```{r}
-data(jtrain)  # from Wooldridge
-str(jtrain)
-table(jtrain$year)
-# head(jtrain,12)
-```
-
-We see there are 157 individuals in the panel.  We have indicator variables for `d88` and `d89`.
-
-```{r}
-# split the dataframe by year
-tmp <- split.data.frame(jtrain, as.factor(jtrain$year))
-jtrain_87 <- tmp$'1987'
-jtrain_88 <- tmp$'1988'
-jtrain_89 <- tmp$'1989'
-```
-#### OLS Method (1987 only)
-```{r}
-# let's ignore 1988 and 1989, and estimate a model based on 1987
-# employ = number of employees
-# hrsemp = number of hours of training per employee
-# sales = annual firm sales in $
-# scrap = # units scrapped
-# "l" columns indicate logs
-summary(cbind(jtrain_87$lscrap, jtrain_87$lsales, jtrain_87$hrsemp, jtrain_87$lemploy))
-jtrain87_ols <- lm(lscrap ~ hrsemp + lemploy + lsales, data=jtrain_87)
-summary(jtrain87_ols)
-```
-
-This model doesn't tell us anything about change over time, nor does it remove the time-invariant unobserved variables.  As a result, it's possible to have omitted variable bias.
-
-#### The `plm` function
-
-Now let's look at a proper panel model using `plm`.  The `plm` function supports 4 estimation methods:
+The `plm` function supports 4 estimation methods:
 
   1. pooled OLS (model='pooling')
   2. fixed effects (model='within')
@@ -125,7 +92,50 @@ It also supports unbalanced panels, two-way effects, and instrumental variables.
 
 The `plm` function expects data in a _person-period_ format (ie. one row per person per time period observation).  The `pdata.frame` call is used to add an index to a data frame.
 
-#### Example: First-Difference Method
+### Example: job training effect on manufacturing scrap rate
+
+```{r}
+data(jtrain)  # from Wooldridge
+str(jtrain)
+table(jtrain$year)
+# table(jtrain$fcode)
+# head(jtrain,12)
+```
+
+We see there are 157 individuals in the panel.  We have indicator variables for `d88` and `d89`.
+
+```{r}
+# split the dataframe by year
+# technique for EDA, rather than a technique for panel data analysis
+tmp <- split.data.frame(jtrain, as.factor(jtrain$year))
+jtrain_87 <- tmp$'1987'
+jtrain_88 <- tmp$'1988'
+jtrain_89 <- tmp$'1989'
+```
+### Example: (Naive) OLS Method - applied to a single year
+
+Warning: OLS models don't tell us anything about change over time, nor do they remove the time-invariant unobserved variables.  As a result, it's possible to have omitted variable bias. Here, we just do a naive model for a single year subset of our data (not recommended).
+
+```{r}
+# let's ignore 1988 and 1989, and estimate a model based on 1987
+# grant = job training grant
+# grant_1 = 1-year lagged training grant
+# scrap = # units scrapped
+# "l" columns indicate logs
+
+# look at effect of grant and grant_1 (=lag with k=1)
+jtrain89_ols <- lm(lscrap ~ grant + grant_1, data=jtrain_89)
+summary(jtrain89_ols)
+
+# effect of the grant on the scrap rate (need to exponentiate)
+exp(jtrain89_ols$coefficients[2]) - 1
+```
+The model shows that the traininggrant, and the lagged grant ($k=1$) both have positive impacts on the (log) scrap rate.  The grant is predicted to _increase_ the firm's scrap rate by 56%!  This is counterintuitive; we need to try a panel data model.
+
+
+### Example: First-Difference Method
+
+Now let's use a proper panel model using `plm`.  
 
 ```{r}
 # specify index as (individuals, periods)
@@ -134,16 +144,25 @@ jtrain_panel <- pdata.frame(jtrain, index=c('fcode','year'))
 str(jtrain_panel$scrap)
 
 # first difference model
-jtrain_fd <- plm(lscrap ~ hrsemp + lsales + lemploy, data=jtrain_panel, model='fd')
-summary(jtrain_fd)
+jtrain_g_fd <- plm(lscrap ~ grant + grant_1, data=jtrain_panel, model='fd')
+summary(jtrain_g_fd)
 ```
-#### Example: Fixed Effects Method
+Observe that the directional effect of the coefficients is as expected - job training reduces scrap rate.
+
+### Example: Fixed Effects Method
+
+Alternately, we can apply the FE method.
 
 ```{r}
-# fixed effects model
-jtrain_fe <- plm(lscrap ~ hrsemp + lsales + lemploy, data=jtrain_panel, model='within')
-summary(jtrain_fe)
+# fixed effects model of grants
+jtrain_g_fe <- plm(lscrap ~ d88 + d89 + grant + grant_1, data=jtrain_panel, model='within')
+summary(jtrain_g_fe)
+
+# check effect of grant on scrap
+exp(jtrain_g_fe$coefficients[3])-1
+exp(jtrain_g_fe$coefficients[4])-1
 ```
+Note the negative sign on the coefficients for the effect of training grants -- job training in 1988 reduces scrap rate in 1989 by 22% (more aligned with expectations).  Job training in 1987 reduces scrap rate in 1989 by 34%.
 
 ## Random Effects Models
 

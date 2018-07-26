@@ -137,8 +137,8 @@ $(document).ready(function () {
 <p>The more general form of the equation with <span class="math inline">\(k\)</span> explanatory variables is:</p>
 <p><span class="math display">\[ y_{it} - \bar{y}_i =  \beta_1 (\bar{x}_{i1} - \bar{x}_{i1}) +  \beta_2 (\bar{x}_{i2} - \bar{x}_{i2}) +  ... + \beta_k (\bar{x}_{ik} - \bar{x}_{ik}) +  + (\epsilon_{it} - \bar{\epsilon}_{it}) \]</span></p>
 <p>As with the First Difference transformation, any explanatory variables that are constant in the dataset will be dropped out, too. Variables with very little variation will become almost constant after transformation. <em>Interactions</em> with time-invariant variables can be estimated through use of (time) dummy variables. However, if a full set of time dummies is included, then its impossible to estimate the effect of deterministic time-varying variables because they can’t be distinguished from aggregate time effect.</p>
-<div id="estimating-fixed-effects-model-with-ols" class="section level4">
-<h4>Estimating Fixed Effects model with OLS</h4>
+<div id="estimating-fixed-effects-model-with-ols" class="section level3">
+<h3>Estimating Fixed Effects model with OLS</h3>
 <p>This time-demeaned equation can then be estimated by OLS. It uses time variation <em>within</em> each of the cross-sectional units (subjects) in the dataset. Because of this, the fixed effect transformation is also called <em>within transformation</em>. CLM assumptions are still required in order for estimators to be consistent. <span class="math inline">\(\epsilon_{it}\)</span> must have zero-conditional mean (<span class="math inline">\(E(\epsilon_{it} | X_i, a_i)=0 \  \forall t\)</span>), homoskedasticity, and serially uncorrelated across <span class="math inline">\(t\)</span>.</p>
 <p>The poolability test in <code>pooltest</code> has a null hypothesis that the slope coefficient is constant across time. The serial correlation test in <code>pbgtest</code> has a null hypothesis of <em>no</em> serial correlation.</p>
 <pre class="r"><code>data(&quot;Grunfeld&quot;)
@@ -171,11 +171,26 @@ pbgtest(grun_fe, order=2)</code></pre>
 ## alternative hypothesis: serial correlation in idiosyncratic errors</code></pre>
 <p>In this case, we strongly reject the null hypothesis for poolability and for no serial correlation.</p>
 </div>
-<div id="between-estimators" class="section level3">
-<h3>Between Estimators</h3>
+</div>
+<div id="between-estimators" class="section level2">
+<h2>Between Estimators</h2>
 <p>We do not focus on the coefficients of the “average” equation above, as they are biased when the observed explanatory variables <span class="math inline">\(x\)</span> are correlated with the unobserved fixed effect <span class="math inline">\(a_i\)</span>. Additionally, these don’t use the panel data efficiently, as they lose the time element.</p>
 <p>If we think the explanatory variables and the unobserved fixed effect are <em>uncorrelated</em>, we would be better off using the <strong>random effect model</strong>.</p>
 </div>
+<div id="the-plm-function-for-panel-data-modeling" class="section level2">
+<h2>The <code>plm</code> function for panel data modeling</h2>
+<p>The <code>plm</code> function supports 4 estimation methods:</p>
+<ol style="list-style-type: decimal">
+<li>pooled OLS (model=‘pooling’)</li>
+<li>fixed effects (model=‘within’)</li>
+<li>random effects (model=‘random’)</li>
+<li>first differences (model=‘fd’)</li>
+<li>between (model=‘between’)</li>
+</ol>
+<p>It also supports unbalanced panels, two-way effects, and instrumental variables. For example, if you have a model <span class="math inline">\(y\)</span> is related to <span class="math inline">\(x1\)</span> and <span class="math inline">\(x2\)</span> endogenous variables, <span class="math inline">\(x3\)</span> exogenous variable,and <span class="math inline">\(z1\)</span> and <span class="math inline">\(z2\)</span> external instructions, it could specified as either:</p>
+<pre><code>- y ~ x1 + x2 + x3 | x3 + z1 + z2
+- y ~ x1 + x2 + x3 | x. -x1 -x2 + z1 + z2</code></pre>
+<p>The <code>plm</code> function expects data in a <em>person-period</em> format (ie. one row per person per time period observation). The <code>pdata.frame</code> call is used to add an index to a data frame.</p>
 <div id="example-job-training-effect-on-manufacturing-scrap-rate" class="section level3">
 <h3>Example: job training effect on manufacturing scrap rate</h3>
 <pre class="r"><code>data(jtrain)  # from Wooldridge
@@ -216,72 +231,55 @@ str(jtrain)</code></pre>
 <pre><code>## 
 ## 1987 1988 1989 
 ##  157  157  157</code></pre>
-<pre class="r"><code># head(jtrain,12)</code></pre>
+<pre class="r"><code># table(jtrain$fcode)
+# head(jtrain,12)</code></pre>
 <p>We see there are 157 individuals in the panel. We have indicator variables for <code>d88</code> and <code>d89</code>.</p>
 <pre class="r"><code># split the dataframe by year
+# technique for EDA, rather than a technique for panel data analysis
 tmp &lt;- split.data.frame(jtrain, as.factor(jtrain$year))
 jtrain_87 &lt;- tmp$'1987'
 jtrain_88 &lt;- tmp$'1988'
 jtrain_89 &lt;- tmp$'1989'</code></pre>
-<div id="ols-method-1987-only" class="section level4">
-<h4>OLS Method (1987 only)</h4>
+</div>
+<div id="example-naive-ols-method---applied-to-a-single-year" class="section level3">
+<h3>Example: (Naive) OLS Method - applied to a single year</h3>
+<p>Warning: OLS models don’t tell us anything about change over time, nor do they remove the time-invariant unobserved variables. As a result, it’s possible to have omitted variable bias. Here, we just do a naive model for a single year subset of our data (not recommended).</p>
 <pre class="r"><code># let's ignore 1988 and 1989, and estimate a model based on 1987
-# employ = number of employees
-# hrsemp = number of hours of training per employee
-# sales = annual firm sales in $
+# grant = job training grant
+# grant_1 = 1-year lagged training grant
 # scrap = # units scrapped
 # &quot;l&quot; columns indicate logs
-summary(cbind(jtrain_87$lscrap, jtrain_87$lsales, jtrain_87$hrsemp, jtrain_87$lemploy))</code></pre>
-<pre><code>##        V1              V2             V3               V4      
-##  Min.   :-4.61   Min.   :12.6   Min.   :  0.00   Min.   :1.39  
-##  1st Qu.: 0.00   1st Qu.:14.2   1st Qu.:  0.00   1st Qu.:2.71  
-##  Median : 0.52   Median :14.9   Median :  0.00   Median :3.28  
-##  Mean   : 0.60   Mean   :14.9   Mean   :  8.89   Mean   :3.45  
-##  3rd Qu.: 1.79   3rd Qu.:15.7   3rd Qu.: 10.00   3rd Qu.:4.25  
-##  Max.   : 3.40   Max.   :17.7   Max.   :100.00   Max.   :6.18  
-##  NA's   :103     NA's   :38     NA's   :28       NA's   :13</code></pre>
-<pre class="r"><code>jtrain87_ols &lt;- lm(lscrap ~ hrsemp + lemploy + lsales, data=jtrain_87)
-summary(jtrain87_ols)</code></pre>
+
+# look at effect of grant and grant_1 (=lag with k=1)
+jtrain89_ols &lt;- lm(lscrap ~ grant + grant_1, data=jtrain_89)
+summary(jtrain89_ols)</code></pre>
 <pre><code>## 
 ## Call:
-## lm(formula = lscrap ~ hrsemp + lemploy + lsales, data = jtrain_87)
+## lm(formula = lscrap ~ grant + grant_1, data = jtrain_89)
 ## 
 ## Residuals:
 ##    Min     1Q Median     3Q    Max 
-## -2.819 -0.915  0.033  0.871  2.680 
+## -3.537 -0.921 -0.150  0.937  3.371 
 ## 
 ## Coefficients:
-##             Estimate Std. Error t value Pr(&gt;|t|)   
-## (Intercept)  11.7443     4.5747    2.57   0.0142 * 
-## hrsemp       -0.0422     0.0187   -2.26   0.0296 * 
-## lemploy       0.9921     0.3569    2.78   0.0083 **
-## lsales       -0.9506     0.3698   -2.57   0.0141 * 
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+##             Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)   0.0303     0.2921    0.10     0.92
+## grant         0.4473     0.5465    0.82     0.42
+## grant_1       0.1196     0.4445    0.27     0.79
 ## 
-## Residual standard error: 1.3 on 39 degrees of freedom
-##   (114 observations deleted due to missingness)
-## Multiple R-squared:  0.31,   Adjusted R-squared:  0.257 
-## F-statistic: 5.84 on 3 and 39 DF,  p-value: 0.00215</code></pre>
-<p>This model doesn’t tell us anything about change over time, nor does it remove the time-invariant unobserved variables. As a result, it’s possible to have omitted variable bias.</p>
+## Residual standard error: 1.46 on 51 degrees of freedom
+##   (103 observations deleted due to missingness)
+## Multiple R-squared:  0.013,  Adjusted R-squared:  -0.0257 
+## F-statistic: 0.335 on 2 and 51 DF,  p-value: 0.717</code></pre>
+<pre class="r"><code># effect of the grant on the scrap rate (need to exponentiate)
+exp(jtrain89_ols$coefficients[2]) - 1</code></pre>
+<pre><code>##  grant 
+## 0.5641</code></pre>
+<p>The model shows that the traininggrant, and the lagged grant (<span class="math inline">\(k=1\)</span>) both have positive impacts on the (log) scrap rate. The grant is predicted to <em>increase</em> the firm’s scrap rate by 56%! This is counterintuitive; we need to try a panel data model.</p>
 </div>
-<div id="the-plm-function" class="section level4">
-<h4>The <code>plm</code> function</h4>
-<p>Now let’s look at a proper panel model using <code>plm</code>. The <code>plm</code> function supports 4 estimation methods:</p>
-<ol style="list-style-type: decimal">
-<li>pooled OLS (model=‘pooling’)</li>
-<li>fixed effects (model=‘within’)</li>
-<li>random effects (model=‘random’)</li>
-<li>first differences (model=‘fd’)</li>
-<li>between (model=‘between’)</li>
-</ol>
-<p>It also supports unbalanced panels, two-way effects, and instrumental variables. For example, if you have a model <span class="math inline">\(y\)</span> is related to <span class="math inline">\(x1\)</span> and <span class="math inline">\(x2\)</span> endogenous variables, <span class="math inline">\(x3\)</span> exogenous variable,and <span class="math inline">\(z1\)</span> and <span class="math inline">\(z2\)</span> external instructions, it could specified as either:</p>
-<pre><code>- y ~ x1 + x2 + x3 | x3 + z1 + z2
-- y ~ x1 + x2 + x3 | x. -x1 -x2 + z1 + z2</code></pre>
-<p>The <code>plm</code> function expects data in a <em>person-period</em> format (ie. one row per person per time period observation). The <code>pdata.frame</code> call is used to add an index to a data frame.</p>
-</div>
-<div id="example-first-difference-method" class="section level4">
-<h4>Example: First-Difference Method</h4>
+<div id="example-first-difference-method" class="section level3">
+<h3>Example: First-Difference Method</h3>
+<p>Now let’s use a proper panel model using <code>plm</code>.</p>
 <pre class="r"><code># specify index as (individuals, periods)
 jtrain_panel &lt;- pdata.frame(jtrain, index=c('fcode','year'))
 # show a sample to see how index is applied
@@ -291,66 +289,75 @@ str(jtrain_panel$scrap)</code></pre>
 ##   .. ..$ fcode: Factor w/ 157 levels &quot;410032&quot;,&quot;410440&quot;,..: 1 1 1 2 2 2 3 3 3 4 ...
 ##   .. ..$ year : Factor w/ 3 levels &quot;1987&quot;,&quot;1988&quot;,..: 1 2 3 1 2 3 1 2 3 1 ...</code></pre>
 <pre class="r"><code># first difference model
-jtrain_fd &lt;- plm(lscrap ~ hrsemp + lsales + lemploy, data=jtrain_panel, model='fd')
-summary(jtrain_fd)</code></pre>
+jtrain_g_fd &lt;- plm(lscrap ~ grant + grant_1, data=jtrain_panel, model='fd')
+summary(jtrain_g_fd)</code></pre>
 <pre><code>## Oneway (individual) effect First-Difference Model
 ## 
 ## Call:
-## plm(formula = lscrap ~ hrsemp + lsales + lemploy, data = jtrain_panel, 
+## plm(formula = lscrap ~ grant + grant_1, data = jtrain_panel, 
 ##     model = &quot;fd&quot;)
 ## 
-## Unbalanced Panel: n = 47, T = 1-3, N = 135
-## Observations used in estimation: 88
+## Balanced Panel: n = 54, T = 3, N = 162
+## Observations used in estimation: 108
 ## 
 ## Residuals:
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##   -3.22   -0.32   -0.11   -0.18    0.15    2.47 
+##   -3.31   -0.20    0.00   -0.07    0.16    2.40 
 ## 
 ## Coefficients:
-##         Estimate Std. Error t-value Pr(&gt;|t|)  
-## hrsemp  -0.00244    0.00230   -1.06     0.29  
-## lsales  -0.61225    0.34497   -1.77     0.08 .
-## lemploy  0.37792    0.42556    0.89     0.38  
+##         Estimate Std. Error t-value Pr(&gt;|t|)    
+## grant     -0.347      0.108   -3.21   0.0018 ** 
+## grant_1   -0.662      0.172   -3.86   0.0002 ***
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
-## Total Sum of Squares:    34
-## Residual Sum of Squares: 36.6
-## R-Squared:      0.0193
-## Adj. R-Squared: -0.00372
-## F-statistic: -3.03193 on 2 and 85 DF, p-value: 1</code></pre>
+## Total Sum of Squares:    35.9
+## Residual Sum of Squares: 35.8
+## R-Squared:      0.031
+## Adj. R-Squared: 0.0219
+## F-statistic: 0.268059 on 1 and 106 DF, p-value: 0.606</code></pre>
+<p>Observe that the directional effect of the coefficients is as expected - job training reduces scrap rate.</p>
 </div>
-<div id="example-fixed-effects-method" class="section level4">
-<h4>Example: Fixed Effects Method</h4>
-<pre class="r"><code># fixed effects model
-jtrain_fe &lt;- plm(lscrap ~ hrsemp + lsales + lemploy, data=jtrain_panel, model='within')
-summary(jtrain_fe)</code></pre>
+<div id="example-fixed-effects-method" class="section level3">
+<h3>Example: Fixed Effects Method</h3>
+<p>Alternately, we can apply the FE method.</p>
+<pre class="r"><code># fixed effects model of grants
+jtrain_g_fe &lt;- plm(lscrap ~ d88 + d89 + grant + grant_1, data=jtrain_panel, model='within')
+summary(jtrain_g_fe)</code></pre>
 <pre><code>## Oneway (individual) effect Within Model
 ## 
 ## Call:
-## plm(formula = lscrap ~ hrsemp + lsales + lemploy, data = jtrain_panel, 
+## plm(formula = lscrap ~ d88 + d89 + grant + grant_1, data = jtrain_panel, 
 ##     model = &quot;within&quot;)
 ## 
-## Unbalanced Panel: n = 47, T = 1-3, N = 135
+## Balanced Panel: n = 54, T = 3, N = 162
 ## 
 ## Residuals:
-##      Min.   1st Qu.    Median   3rd Qu.      Max. 
-## -1.803771 -0.124092  0.000966  0.136179  1.610651 
+##    Min. 1st Qu.  Median 3rd Qu.    Max. 
+## -2.2869 -0.1124 -0.0178  0.1443  1.4267 
 ## 
 ## Coefficients:
 ##         Estimate Std. Error t-value Pr(&gt;|t|)  
-## hrsemp  -0.00416    0.00247   -1.69    0.095 .
-## lsales  -0.56162    0.36114   -1.56    0.124  
-## lemploy  0.36553    0.43897    0.83    0.407  
+## d88      -0.0802     0.1095   -0.73    0.465  
+## d89      -0.2472     0.1332   -1.86    0.066 .
+## grant    -0.2523     0.1506   -1.68    0.097 .
+## grant_1  -0.4216     0.2102   -2.01    0.047 *
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
-## Total Sum of Squares:    27.3
-## Residual Sum of Squares: 24.9
-## R-Squared:      0.0879
-## Adj. R-Squared: -0.438
-## F-statistic: 2.7298 on 3 and 85 DF, p-value: 0.0489</code></pre>
-</div>
+## Total Sum of Squares:    32.2
+## Residual Sum of Squares: 25.8
+## R-Squared:      0.201
+## Adj. R-Squared: -0.237
+## F-statistic: 6.54259 on 4 and 104 DF, p-value: 9.77e-05</code></pre>
+<pre class="r"><code># check effect of grant on scrap
+exp(jtrain_g_fe$coefficients[3])-1</code></pre>
+<pre><code>##  grant 
+## -0.223</code></pre>
+<pre class="r"><code>exp(jtrain_g_fe$coefficients[4])-1</code></pre>
+<pre><code>## grant_1 
+##  -0.344</code></pre>
+<p>Note the negative sign on the coefficients for the effect of training grants – job training in 1988 reduces scrap rate in 1989 by 22% (more aligned with expectations). Job training in 1987 reduces scrap rate in 1989 by 34%.</p>
 </div>
 </div>
 <div id="random-effects-models" class="section level2">

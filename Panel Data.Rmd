@@ -203,7 +203,7 @@ crime3_plm <- plm(lcrime ~ avgclr, data=crime3_panel_df, model='fd')
 summary(crime3_plm)
 ```
 
-**NOTE: Jeff's identical code in async 11.7.2 generates different results.**
+**NOTE: Jeff's identical code in async 11.7.2 generates different results.  Possibly related to `plm` version.**
 
 ## Distributed Lag Models
 
