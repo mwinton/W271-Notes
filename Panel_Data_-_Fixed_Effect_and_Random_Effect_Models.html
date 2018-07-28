@@ -377,6 +377,11 @@ exp(jtrain_g_fe$coefficients[3])-1</code></pre>
 <p>The <span class="math inline">\(\hat{\lambda}\)</span> estimator ranges between 0 and 1. If <span class="math inline">\(\hat{\lambda}=0\)</span>, then the model is the same as pooled OLS; if <span class="math inline">\(\hat{\lambda}=1\)</span>, then the model is the same as the fixed effects model. So, if we obtain <span class="math inline">\(\hat{\lambda}\)</span> close to zero, that indicates the unobserved effect <span class="math inline">\(a_i\)</span> is relatively unimportant.</p>
 <p>One important benefit of the random effects model (contrasted against the fixed effects model) is that it allows for time-independent explanatory variables. With the random effects model, they do not get completely subtracted out.</p>
 </div>
+<div id="hausman-test-for-validity-of-re-assumptions" class="section level2">
+<h2>Hausman test for validity of RE assumptions</h2>
+<p>We run the Hausman test by estimating both fixed effects and random effects models, then passing them to the R function <code>phtest</code>. A rejection of the null hypothesis indicates that the assumptions required to use the random effects model are not met, and we should instead use the fixed effects model.</p>
+<p>A failure to reject means either that the RE and FE estimates are sufficiently similar that it doesn’t matter which we use, or that sampling variation is so large in the FE estimates that we cannot conclude that practically significant differences are statistically significant. (In this latter case, we would be uncertain whether we have enough information to estimate the coefficients.)</p>
+</div>
 <div id="example-comparing-models-with-wage-data" class="section level2">
 <h2>Example: comparing models with wage data</h2>
 <p>In reality, when we are estimating either FE or RE models, it’s usually informative to also run a pooled OLS model. Comparing the results of the 3 models can help identify the nature of biases left completely in the composite error term (pooled OLS), or partially so (RE). Just don’t forget that because of serial correlation in the error term, standard errors obtained from pooled OLS as usually invalid.</p>
@@ -426,16 +431,25 @@ stargazer(mod_pooled, mod_re, mod_fe, type=&quot;text&quot;, omit.stat='f',
 ## Adjusted R2    0.182      0.168    0.048  
 ## ==========================================
 ## Note:          *p&lt;0.1; **p&lt;0.05; ***p&lt;0.01</code></pre>
+<pre class="r"><code># perform the Hausman test
+phtest(mod_fe, mod_re)</code></pre>
+<pre><code>## 
+##  Hausman Test
+## 
+## data:  lwage ~ educ + black + hisp + exper + exper^2 + married + union
+## chisq = 23, df = 3, p-value = 5e-05
+## alternative hypothesis: one model is inconsistent</code></pre>
 <p>Observations:</p>
 <pre><code>- Coefficients for education, black, and hispanic are similar for pooled and RE
 - Pooled OLS standard errors underestimate the true errors due to serial correlation
 - Compared to pooled model, marriage and union effects are much smaller in RE model
-- In FE model, (which eliminates unboserved fixed effects), marriage and union effects both drop substantially</code></pre>
+- In FE model, (which eliminates unboserved fixed effects), marriage and union effects both drop substantially
+- The Hausman Test indicates that the assumptions for RE are not met; we should use FE model</code></pre>
 </div>
 <div id="takeaways-fixed-effects-vs.random-effects" class="section level2">
 <h2>Takeaways: Fixed Effects vs. Random Effects</h2>
 <p>Because FE model allows for arbitrary correlation between <span class="math inline">\(a_i\)</span> and explanatory variables (RE does not), FE is considered a more convincing tool for determining “ceteris paribus” effects. However, random effects models are particularly important if the explanatory variables are constant over time. When justified, the RE model is generally more <em>efficient</em> (ie. needs fewer observations to achieve a given performance) than pooled OLS.</p>
-<p>Just keep in mind that the assumption that <span class="math inline">\(a_i\)</span> is uncorrelated with all explanatory variables over time is often not a reasonable assumption. If we know (or want to allow) that our unobserved effect is correlated with any explanatory variables - which is often the reason for using panel data in the first place - we should not use RE; use FE or FD models instead. When we use RE, we should give substantial reasons why we consider it valid. There is also a <strong>Hausman</strong> test for the full set of RE assumptions.</p>
+<p>Just keep in mind that the assumption that <span class="math inline">\(a_i\)</span> is uncorrelated with all explanatory variables over time is often not a reasonable assumption. If we know (or want to allow) that our unobserved effect is correlated with any explanatory variables - which is often the reason for using panel data in the first place - we should not use RE; use FE or FD models instead. When we use RE, we should give substantial reasons why we consider it valid. We should also use the Hausman test for the full set of RE assumptions.</p>
 </div>
 
 

@@ -195,6 +195,12 @@ The $\hat{\lambda}$ estimator ranges between 0 and 1.  If  $\hat{\lambda}=0$, th
 
 One important benefit of the random effects model (contrasted against the fixed effects model) is that it allows for time-independent explanatory variables.  With the random effects model, they do not get completely subtracted out.
 
+## Hausman test for validity of RE assumptions
+
+We run the Hausman test by estimating both fixed effects and random effects models, then passing them to the R function `phtest`.  A rejection of the null hypothesis indicates that the assumptions required to use the random effects model are not met, and we should instead use the fixed effects model.
+
+A failure to reject means either that the RE and FE estimates are sufficiently similar that it doesn't matter which we use, or that sampling variation is so large in the FE estimates that we cannot conclude that practically significant differences are statistically significant.  (In this latter case, we would be uncertain whether we have enough information to estimate the coefficients.)
+
 ## Example: comparing models with wage data
 
 In reality, when we are estimating either FE or RE models, it's usually informative to also run a pooled OLS model.  Comparing the results of the 3 models can help identify the nature of biases left completely in the composite error term (pooled OLS), or partially so (RE).  Just don't forget that because of serial correlation in the error term, standard errors obtained from pooled OLS as usually invalid.
@@ -212,6 +218,9 @@ mod_fe <- plm(lwage ~ educ + black + hisp + exper + exper^2 + married + union,
                   data=wage_plm, model='within')
 stargazer(mod_pooled, mod_re, mod_fe, type="text", omit.stat='f',
           column.labels=c('Pooled','RE','FE'))
+
+# perform the Hausman test
+phtest(mod_fe, mod_re)
 ```
 Observations:
 
@@ -219,9 +228,10 @@ Observations:
     - Pooled OLS standard errors underestimate the true errors due to serial correlation
     - Compared to pooled model, marriage and union effects are much smaller in RE model
     - In FE model, (which eliminates unboserved fixed effects), marriage and union effects both drop substantially
+    - The Hausman Test indicates that the assumptions for RE are not met; we should use FE model
     
 ## Takeaways: Fixed Effects vs. Random Effects
 
 Because FE model allows for arbitrary correlation between $a_i$ and explanatory variables (RE does not), FE is considered a more convincing tool for determining "ceteris paribus" effects.  However, random effects models are particularly important if the explanatory variables are constant over time.  When justified, the RE model is generally more _efficient_ (ie. needs fewer observations to achieve a given performance) than pooled OLS. 
     
-Just keep in mind that the assumption that $a_i$ is uncorrelated with all explanatory variables over time is often not a reasonable assumption.    If we know (or want to allow) that our unobserved effect is correlated with any explanatory variables - which is often the reason for using panel data in the first place - we should not use RE; use FE or FD models instead.  When we use RE, we should give substantial reasons why we consider it valid.  There is also a **Hausman** test for the full set of RE assumptions.
+Just keep in mind that the assumption that $a_i$ is uncorrelated with all explanatory variables over time is often not a reasonable assumption.    If we know (or want to allow) that our unobserved effect is correlated with any explanatory variables - which is often the reason for using panel data in the first place - we should not use RE; use FE or FD models instead.  When we use RE, we should give substantial reasons why we consider it valid.  We should also use the Hausman test for the full set of RE assumptions.
