@@ -1,0 +1,157 @@
+---
+title: "Panel Data - Linear Mixed Effect Models"
+author: "Michael Winton"
+date: \today
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+header-includes: \usepackage{amsmath}
+geometry: margin=1in
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits=4, fig.height=3.5, warn=FALSE)
+
+library(car)
+library(GGally)
+library(lme4) # linear mixed effects models
+library(plm)
+library(Ecdat)  # sample datasets
+library(stargazer) # summarize models
+library(wooldridge)  # sample datasets
+```
+
+## Mixed Effect Models
+
+In a _mixed model_ for panel data, we add one or more _random effects_ in order to give structure to the error term.  This is in contract to OLS regression, where you don't want structure in your error terms.  By adding individual-specific dummy variables (intercepts) to our model, we avoid violating the independence requirement.  However, its still possible to have omitted variable bias if important variables which are correlated with our explanatory variables are missing altogether from our model.
+
+> ASIDE: what econometrics calls "panel models" is also referred to in other fields as "mixed effects, hierarchical models" or "models for longitudinal data".
+
+### Example: modeling variations in human speech (pitch)
+
+In speech recognition, it's common to model pitch as a function of age:
+
+$$ pitch_i \sim   age_i + \epsilon_i$$
+Here, $age_i$ is a fixed effect, and $\epsilon_i$ is the error term that represents random factors we can't control for experimentally.   We will look at data from a Korean experiment, wherein multiple subjects (male and female) were asked to say certain responses in both formal and informal settings.  
+```{r}
+politeness <- read.csv(file='politeness_data.csv')
+str(politeness)
+head(politeness)
+summary(politeness) # note there's one NA value for frequency
+table(politeness$subject)
+table(politeness$scenario)
+table(politeness$gender)
+table(politeness$attitude)
+```
+We note that there's a balanced panel, and we have one observation with a missing dependent variable. 
+
+```{r}
+boxplot(frequency ~ subject, data=politeness)
+```
+
+As expected, we see females generally have higher pitched voices than males, so we need to update our model to incorporate gender:
+
+$$ pitch_i \sim   politeness_i + gender_i + \epsilon_i$$
+
+We also observe indidual variation between voices. In a linear mixed effect model, we would model this individual-specific factor as a _random effect_.  This random effect is an individual-specific intercept representing each person's baseline pitch, and can be estimated with a linear mixed model. Thus, our updated model is:
+
+$$pitch_i \sim  politeness_i + gender_i + (1 | subject) + \epsilon_i$$
+Importantly, this framework resolves the interdependence issues that stem from having multiple response from the same subjects (which would be the problem with traditional OLS modeling).
+
+In this study, the specific scenario prompts were different (e.g. asking a favor, or apologizing for being late).  
+```{r}
+boxplot(frequency ~ scenario, data=politeness)
+```
+
+We need to add random effects because of this scenario-dependent variation, too.  These are also required in order to avoid violating the independence requirement.  Our updated model becomes:
+
+$$pitch_i \sim  politeness_i + gender_i + (1 | subject) + (1 | scenario) + \epsilon_i$$
+So, now we have different intercepts for each subject, as well as for each scenario.  Our model now accounts for all known interdependencies.  We can also observe the boxplots by gender and attitude (ie. polite or informal).
+
+```{r}
+boxplot(frequency ~ attitude + gender, data=politeness)
+```
+
+
+## Modeling in R
+
+In R, we use the `lme4` (or `nmle`) packages for linear mixed models.
+
+```{r}
+mod_lmm <- lmer(frequency ~ attitude + (1|subject) + (1|scenario), data=politeness)
+summary(mod_lmm)
+```
+
+Note that R reports the variance of the random effect intercepts for subjects and scenarios, rather than the individual numbers.  The scenario induces much less variability than the human subjects do.   The residual term corresponds to $\epsilon_i$ in our model - variability not explained by either the scenario or subject, but some other factor.
+
+We also see the estimated coefficients for the fixed effect of attitude; from the t-value, we see it's highly statistically significant.   When switching from informal to polite speech, pitch drops by -19.7 Hz on average.  Also note that the intercept in this model didn't take into account gender, so it's the average person's baseline pitch (not particularly useful).
+
+```{r}
+mod_lmm2 <- lmer(frequency ~ attitude + gender + (1|subject) + (1|scenario), data=politeness)
+summary(mod_lmm2)
+```
+
+In this model, the intercept (256.85) represents the baseline female voice, and the baseline male voice is 109 Hz lower, on average.  Also observe that the intercept for subject dropped significantly in this model, as much of the variation is now accounted for by gender.
+
+## Estimating p-value via Likelihood Ratio tests
+
+In order to calculate a p-value, we need to run the model twice - with and without the factor in question, setting the parameter `REML=FALSE`.  (REML is an alternative to log-likehlihood estimation.)
+
+```{r}
+mod_lmm_h0 <- lmer(frequency ~ gender + (1|subject) + (1|scenario), data=politeness, REML=FALSE)
+mod_lmm_ha <- lmer(frequency ~ attitude + gender + (1|subject) + (1|scenario), data=politeness, REML=FALSE)
+anova(mod_lmm_h0, mod_lmm_ha)
+```
+
+This confirms a highly statistically significant result.  Politeness affected pitch ($\chi^2(1)=11.6, p=0.00065$), lowering it by 19.7 Hz (std error = +/- 5.58 Hz).
+
+We could also explore for an interaction term between gender and attitude (does one gender respond more strongly than the other to changes in politeness).
+
+```{r}
+mod_lmm_h0 <- lmer(frequency ~ gender + (1|subject) + (1|scenario), data=politeness, REML=FALSE)
+mod_lmm_ha <- lmer(frequency ~ attitude + gender + attitude:gender + (1|subject) + (1|scenario), data=politeness, REML=FALSE)
+anova(mod_lmm_h0, mod_lmm_ha)
+summary(mod_lmm_ha)
+```
+
+Again, we see a statistically significant result (p=0.0011) with men's voices dropping less on average (-27.40 + 15.57 Hz) than women's (-27.40 Hz).
+
+## Random Intercepts vs. Random Slopes 
+
+The above models were all considered random intercept models, because the fixed effects are the same for all subjects and scenarios.  We can confirm that by looking at the coefficients:
+
+```{r}
+coef(mod_lmm_ha)
+```
+
+If we feel it's appropriate to account for different scenarios eliciting more or less politeness than others, we would need random slopes, too.  In a _random slope model_, both intercepts and slopes are allowed to vary with the subject or scenario.  This is very useful in practice, and different people often have different magnitudes of reaction to various stimuli.
+
+To model this in R, we specify, for example, `(1 + attitude | scenario)` which tells R to expect a different intercept per scenario, as well as a different slope in attitude per scenario.
+
+```{r}
+mod_rsm <- lmer(frequency ~ attitude + gender + (1 + attitude | subject) +
+                  (1 + attitude | scenario), data=politeness, REML=FALSE)
+summary(mod_rsm)
+```
+
+In the summary output, we see that the variance is reported now for slopes as well as intercepts.  We can also look at the individual coefficients for both scenario as well as subject:
+
+```{r}
+coef(mod_rsm)
+```
+Because the coefficients are all of the same sign, and are quite similar in magnitude, we do see the same general tendencies of voice pitch to drop when shifting from informal to polite speech.  
+
+Now, calculate the p-value.  Because the full model includes random slope terms, the null hypothesis needs them, too, even though the `attitude` variable is removed from the null model.
+
+```{r}
+mod_rsm_h0 <- lmer(frequency ~ gender + (1 + attitude | subject) +
+                  (1 + attitude | scenario), data=politeness, REML=FALSE)
+mod_rsm_ha <- lmer(frequency ~ attitude + gender + (1 + attitude | subject) +
+                  (1 + attitude | scenario), data=politeness, REML=FALSE)
+anova(mod_rsm_h0, mod_rsm_ha)
+```
+
