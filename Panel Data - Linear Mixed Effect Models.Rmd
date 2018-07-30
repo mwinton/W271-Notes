@@ -154,4 +154,4 @@ mod_rsm_ha <- lmer(frequency ~ attitude + gender + (1 + attitude | subject) +
                   (1 + attitude | scenario), data=politeness, REML=FALSE)
 anova(mod_rsm_h0, mod_rsm_ha)
 ```
-
+We conclude that just as in the random intercept model, in this random slope model, there is a statistically significant effect of attitude (informal vs. polite) on pitch of speech.
