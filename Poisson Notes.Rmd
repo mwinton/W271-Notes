@@ -1,12 +1,13 @@
 ---
 title: "Poisson Response - Categorical Data"
 author: "Michael Winton"
-date: \today
-output: pdf_document
-header-includes:
-  - \usepackage{amsmath}
-fontsize: 11pt
+date: "6/16/2018"
+output:
+  html_document:
+    df_print: paged
+header-includes: \usepackage{amsmath}
 geometry: margin=1in
+fontsize: 11pt
 ---
 
 ```{r setup, echo=FALSE}

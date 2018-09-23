@@ -1,24 +1,25 @@
 ---
 title: "Binary Response - Categorical Data"
 author: "Michael Winton"
-date: \today
-output: pdf_document
-header-includes:
-  - \usepackage{amsmath}
-fontsize: 11pt
+date: "6/16/2018"
+output:
+  html_document:
+    df_print: paged
+header-includes: \usepackage{amsmath}
 geometry: margin=1in
+fontsize: 11pt
 ---
 
-\section{Likelihood Function}
+## Likelihood Function
 
-\subsection{Logit Function}
+### Logit Function
 
 $$log(Odds) = log(\frac{\pi}{1-{\pi}}) = logit(\pi) = \beta_0 + \beta_1 x_{1} +... +\beta_px_{p}$$
 And its inverse:
 
 $$\pi = \frac{exp(\beta_0 + \beta_1 x_{1} +... +\beta_p x_{p})}{1 + exp(\beta_0 + \beta_1 x_{1} +... +\beta_p x_{p})}$$
 
-\subsection{Maximum Likelihood and $\hat{\pi}$}
+### Maximum Likelihood and $\hat{\pi}$
 
 Plug in our measured $x_{11...np}$ and $y_{1...n}$ values and maximize the log likelihood function:
 
@@ -39,7 +40,7 @@ $$\hat{\pi} = \frac{exp(\hat{\beta_0} + \hat{\beta_1} x_{1} +... +\hat{\beta_p}x
 
 Note that the $i$ subscript is gone.  There's only one $\hat{\pi}$ equation for our entire sample.
 
-\subsection{Calculating log likelihood}
+### Calculating log likelihood
 
 ```{r}
 # load Bilder's dataset
@@ -61,7 +62,7 @@ logL(fit_dist$coefficients, placekick$distance, placekick$good)
 logLik(fit_dist)
 ```
 
-\subsection{Aside: Bernoulli (binary) or Binomial data give same results}
+### Aside: Bernoulli (binary) or Binomial data give same results
 
 ```{r}
 # working with data in binomial form
@@ -74,8 +75,7 @@ fit_dist$coefficients
 fit_dist_binom$coefficients
 ```
 
-\newpage
-\section{Likelihood Ratio Test (LRT)}
+## Likelihood Ratio Test (LRT)
 
 $$ \Lambda = \frac{\text{Max Likelihood under }H_0}{\text{Max Likelihood under }H_0, H_{alt}}$$
 It turns out that $-2 log(\Lambda)$ has a convenient $\chi_q^2$ distribution, where $q$ is the number of variables being tested in $H_0$, so that format is used more frequently. Reject $H_0$ when $-2 log(\Lambda)$ > $\chi_q^2$ critical value.
@@ -121,7 +121,7 @@ dev
 1-pchisq(dev, df=1)
 ```
 
-\section{Deviance}
+## Deviance
 
 **Deviance** is simply how much two models differ, as measured by difference between their $-2log(\Lambda)$ statistic.  A single model by itself cannot have a deviance, since by definition it is a ratio.
 
@@ -162,8 +162,9 @@ data.frame(H0_resid_dev=resid_dev_fit_dist, Ha_resid_dev=resid_dev_fit_dist_chan
 # confirm this matches anova results
 anova(fit_dist, fit_dist_change, test="Chisq")
 ```
-\newpage
-\section{Odds Ratio and Confidence Interval}
+
+
+## Odds Ratio and Confidence Interval
 
 Pick an appropriate value for x (not always "1 unit"), and if there are no interaction or higher order terms, the Odds Ratio (OR) is simple:
 
@@ -175,7 +176,7 @@ Similarly, if we have higher order terms for $x_1$, we have to specify the OR _a
 
 $$ OR = \frac{Odds_{x+c}}{Odds_x} = \frac{exp(\beta_0+\beta_1(x_1+c) + ... + \beta_p(x_1+c)^2)}{exp(\beta_0+\beta_1x_1 + ... + \beta_px_1^2)} = exp(c\beta_1 + 2cx_1 +c^2)$$
 
-\subsection{Confidence Interval for OR}
+### Confidence Interval for OR
 
 Wald CI only gives good estimates for large $n$, but it's easy to calculate.  Basically, just calculate the CI for the value inside the exponential term above (e.g. for no interactions, $c\beta_1$), and then exponentiate.
 
@@ -198,9 +199,9 @@ beta1_ci_lrt <- confint(fit_dist, parm="distance", level=0.95)
 (OR_ci_lrt <- rev(exp(c*beta1_ci_lrt)))
 ```
 
-\section{Probability of Success and its Confidence Interval}
+## Probability of Success and its Confidence Interval
 
-\subsection{Wald Confidence Interval}
+### Wald Confidence Interval
 
 Similar to how we calculate CI for OR, we first find CI for the linear predictor, and then plug it back in to the equation for $\hat{\pi}$.  
 
@@ -242,7 +243,7 @@ x <- 20
 (ci_pi <- exp(ci_lp) / (1+exp(ci_lp)))
 ```
 
-\subsection{Profile Likelihood Interval}
+### Profile Likelihood Interval
 
 We use `mcprofile(...)` to calculate profile likelihood intervals.  We need to pass in a matrix of all of our $x$ values to be evaluated, rather than a dataframe.  **This matrix needs to include a column of 1's** to be multiplied by $\beta_0$ (so that matrix dimensions match).
 
@@ -258,7 +259,7 @@ K <- matrix(data=c(1,x), nrow=1, ncol=2)
 (ci_pi_pli <- exp(ci_logit_pli$confint) / (1+exp(ci_logit_pli$confint)))
 ```
 
-\subsection{Probability Plots}
+### Probability Plots
 
 We need to make sure our data is in binomial form. See above for example of converting Bernoulli trials to Binomial format.  Also we need to wrap our confidence interval prediction logic in a formula that can accept a single $x$ from the `curve(...)` function. 
 

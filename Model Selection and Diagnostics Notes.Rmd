@@ -1,12 +1,13 @@
 ---
 title: "Model Selection and Diagnostics"
 author: "Michael Winton"
-date: \today
-output: pdf_document
-header-includes:
-  - \usepackage{amsmath}
-fontsize: 11pt
+date: "6/16/2018"
+output:
+  html_document:
+    df_print: paged
+header-includes: \usepackage{amsmath}
 geometry: margin=1in
+fontsize: 11pt
 ---
 
 ```{r setup, echo=FALSE}
@@ -14,13 +15,13 @@ library(knitr)
 opts_chunk$set(tidy.opts=list(width.cutoff=70), tidy=TRUE, fig.align="center")
 ```
 
-\section{Variable Selection}
+## Variable Selection
 
 Start by using subject matter knowledge to reduce number of variables before using algorithms.  Reducing set of variables in a model helps with interpretability.  Also, if $p > n$, then it's a requirement.
 
 Also, we have the bias-variance tradeoff.  Bias comes from inability to guess the correct relationship between variables, as well as errors in the choice of variables in the model.  But, estimating parameters adds variability to any predicted values, so addinng more variables makes the variance worse. For prediction, it might be better to use a model with too few variables (to avoid excess variance).  For inference, we might prefer to have more variables (so we don't miss fine contributions).
 
-\subsection{Model Comparison Criteria}
+### Model Comparison Criteria
 
 Hypothesis tests can be used to compare models *only* when one is nested in the other.  Residual deviance is not a good way to compare models, because it always goes down when you add variables to the model.
 
@@ -41,13 +42,13 @@ $BIC$ has the property of _consistency_, which means asymptotically it selects t
 
 We should prefer $AIC_c$ or $BIC$.  We use `AIC(...)` to calculate these by setting $k=2$ (default) or $k=log(n)$ in the function call.  $AIC_c$ must be calculated manually from $AIC$ result.
 
-\subsection{All Subsets Regression}
+### All Subsets Regression
 
 Only computationally feasible for up to ~10 explanatory variables.  There are deterministic and stochastic (random process) variants that can be used when it's not feasible to try all variables.  The "genetic" stochastic algorithm tends to do a good job converging on a good model, but run it a few times to confirm since it's random.
 
 These can be run with `glmulti(...)` (slow and may have java problems, but supports more models), `bestglm(...)`, and `BMA(...)`.  See pages 270-271 for details.
 
-\subsection{Stepwise Selection}
+### Stepwise Selection
 
 Stepwise Forwards & Backwards Selection are greedy algorithms, either adding or eliminating one variable at a time.  Use `step(...)` function.
 
@@ -55,7 +56,7 @@ Alternating Stepwise Selection gives variables that have been removed a chance t
 
 **IMPORTANT: Stepwise procedures have to be done with information criteria, not hypothesis tests.  Also, significant tests for variables in a model selected by an information criterion are not valid tests, so you can't follow this with another method try to reduce number of variables!**
 
-\subsection{LASSO}
+### LASSO
 
 Variable selection tends to select variables where random chance made them appear more significant vs. less; thus parameter estimates for selected variables are biased (often estimated further away from zero than actual).  LASSO attempts to select variables and shrink bias back towards zero.
 
@@ -92,14 +93,14 @@ predict_lasso <- predict(cv_lasso_fit, newx=xx, type='response')
 head(cbind(placekick$distance, round(predict_lasso,3)))
 ```
 
-\section{Model Evaluation and Diagnostics}
+## Model Evaluation and Diagnostics
 
 When estimating a GLM, we have 3 assumptions to evaluate:
 1) Data are generated iid by the model we propose (binomial, Poisson, etc...)
 2) The mean of the distribution is linked to the explanatory variables by the link function we chose
 3) The link relates to the variables in a linear fashion.
 
-\subsection{Residuals}
+### Residuals
 
 Raw residuals ($y_i - \hat{y}_i$) aren't very helpful, as they scale with the mean (ie. not standardized).  Instead, we use Pearson residuals, which account for variance in the response variables.  Note that for Bernoulli trials, it's important to aggregate them into a binomial format before evaluating residuals.
 
@@ -118,7 +119,7 @@ We can interpret standardizing residuals approximately as observations from a st
 
 In cases like that, we would want to calculate the probability of observing such an extreme residual, assuming that $\hat{y}_i$ is correct.  In other words, what's the probability of observing a count at least as extreme as the observed $y_i$.
 
-\subsection{Diagnostic Plots}
+### Diagnostic Plots
 
 1) _Plot standardized residuals vs. each explanatory variable_.  This helps confirm _the form_ of the explanatory variable is correct.  We should see no serious fluctuations of the mean, and approximately equal variance throughout the range of $x$.  Curvature may suggest need for a transformation. Don't overreact to changes in loess curves near extremes.
 
